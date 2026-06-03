@@ -1,0 +1,13 @@
+{
+    "name": "frontend",
+    "version": "1.0.0",
+    "devDependencies": {
+        "oxfmt": "catalog:",
+        "oxlint": "catalog:",
+        "typescript": "catalog:",
+        "vite": "catalog:"
+    },
+    "dependencies": {
+        "@serenity-kit/opaque": "catalog:"
+    }
+}

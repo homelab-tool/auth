@@ -1,0 +1,21 @@
+{
+    "$schema": "https://www.schemastore.org/tsconfig.json",
+    "include": ["src"],
+    "compilerOptions": {
+        "moduleResolution": "bundler",
+        "module": "esnext",
+        "target": "esnext",
+        "types": ["vite/client"],
+        "lib": ["ESNext", "DOM"],
+        "noEmit": true,
+        "declaration": true,
+        "noUncheckedIndexedAccess": true,
+        "exactOptionalPropertyTypes": true,
+        "strict": true,
+        "verbatimModuleSyntax": true,
+        "isolatedModules": true,
+        "noUncheckedSideEffectImports": true,
+        "moduleDetection": "force",
+        "skipLibCheck": true
+    }
+}

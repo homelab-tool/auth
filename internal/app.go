@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log/slog"
 
+	"github.com/homelab-tool/auth/internal/api"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
@@ -38,8 +39,21 @@ func CreateApp() (*App, error) {
 		},
 	}))
 
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+	}))
+
 	var db, err = InitializeDb()
 	if err != nil {
+		return nil, err
+	}
+
+	api := api.Api{
+		DB: db,
+	}
+
+	if err = api.SetupRoutes(e.Group("/api")); err != nil {
 		return nil, err
 	}
 
@@ -48,11 +62,5 @@ func CreateApp() (*App, error) {
 		DB:     db,
 	}
 
-	e.POST("/auth", app.AuthHandler)
-
 	return app, nil
-}
-
-func (a *App) AuthHandler(c *echo.Context) error {
-	return c.String(500, "todo")
 }

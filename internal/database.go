@@ -52,8 +52,8 @@ func InitializeDb() (*sql.DB, error) {
 	return db, nil
 }
 
-func runMigration() error {
-	log.Debug().Msg("running migrations")
+func MigrateDB(dbURL string) error {
+	log.Debug().Str("url", dbURL).Msg("running migrations")
 
 	const sourceName = "iofs"
 	sourceDriver, err := iofs.New(fs, "migrations")
@@ -61,7 +61,7 @@ func runMigration() error {
 		return err
 	}
 
-	m, err := migrate.NewWithSourceInstance(sourceName, sourceDriver, "sqlite3://Database.sqlite")
+	m, err := migrate.NewWithSourceInstance(sourceName, sourceDriver, dbURL)
 	if err != nil {
 		return err
 	}
@@ -75,4 +75,8 @@ func runMigration() error {
 	}
 
 	return nil
+}
+
+func runMigration() error {
+	return MigrateDB("sqlite3://Database.sqlite")
 }
