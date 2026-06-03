@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/base64"
+	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"github.com/bytemare/opaque"
 	"github.com/dgraph-io/ristretto/v2"
@@ -12,6 +14,9 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
+
+const maxPayloadSize = 65536
+const maxClientIdLen = 256
 
 var base64Encoding = base64.RawURLEncoding
 
@@ -30,8 +35,8 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 	}
 
 	cache, err := ristretto.NewCache(&ristretto.Config[string, []byte]{
-		NumCounters: 64 << 2,
-		MaxCost:     64,
+		NumCounters: 1e6,
+		MaxCost:     1e4,
 		BufferItems: 64,
 	})
 
@@ -41,8 +46,8 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 	}
 
 	loginCache, err := ristretto.NewCache(&ristretto.Config[string, *opaque.ServerOutput]{
-		NumCounters: 64 << 2,
-		MaxCost:     64,
+		NumCounters: 1e6,
+		MaxCost:     1e4,
 		BufferItems: 64,
 	})
 
@@ -71,6 +76,26 @@ type RegisterRequest struct {
 	Payload  string `json:"payload"`
 }
 
+func validateClientId(clientId string) error {
+	if clientId == "" {
+		return fmt.Errorf("client id is empty")
+	}
+	if !utf8.ValidString(clientId) {
+		return fmt.Errorf("client id is not valid utf-8")
+	}
+	if len(clientId) > maxClientIdLen {
+		return fmt.Errorf("client id too long: %d bytes", len(clientId))
+	}
+	return nil
+}
+
+func checkPayloadSize(raw string) error {
+	if len(raw) > maxPayloadSize {
+		return fmt.Errorf("payload too large: %d bytes", len(raw))
+	}
+	return nil
+}
+
 func isClientIdTaken(ctx context.Context, db *sql.DB, clientId string) (bool, error) {
 	var count int
 	err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM opaque_user_data WHERE client_id = ?", clientId).Scan(&count)
@@ -88,8 +113,11 @@ func (api *opaqueApi) registerStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	// TODO: validation
 	clientId := request.ClientId
+	if err := validateClientId(clientId); err != nil {
+		log.Err(err).Msg("invalid client id")
+		return c.String(400, "invalid request")
+	}
 
 	userExists, err := isClientIdTaken(c.Request().Context(), api.db, clientId)
 	if err != nil {
@@ -99,6 +127,11 @@ func (api *opaqueApi) registerStart(c *echo.Context) error {
 
 	if userExists {
 		return c.String(409, "client id is already taken")
+	}
+
+	if err := checkPayloadSize(request.Payload); err != nil {
+		log.Err(err).Msg("payload too large")
+		return c.String(400, "invalid request")
 	}
 
 	payload, err := base64Encoding.DecodeString(request.Payload)
@@ -135,11 +168,19 @@ func (api *opaqueApi) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	// TODO: validation
 	clientId := request.ClientId
+	if err := validateClientId(clientId); err != nil {
+		log.Err(err).Msg("invalid client id")
+		return c.String(400, "invalid request")
+	}
 
 	credentialId, foundClientId := api.cache.Get(clientId)
 	if !foundClientId || credentialId == nil {
+		return c.String(400, "invalid request")
+	}
+
+	if err := checkPayloadSize(request.Payload); err != nil {
+		log.Err(err).Msg("payload too large")
 		return c.String(400, "invalid request")
 	}
 
@@ -205,8 +246,16 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	// TODO: validation
 	clientId := request.ClientId
+	if err := validateClientId(clientId); err != nil {
+		log.Err(err).Msg("invalid client id")
+		return c.String(400, "invalid request")
+	}
+
+	if err := checkPayloadSize(request.Payload); err != nil {
+		log.Err(err).Msg("payload too large")
+		return c.String(400, "invalid request")
+	}
 
 	payload, err := base64Encoding.DecodeString(request.Payload)
 	if err != nil {
@@ -279,8 +328,16 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	// TODO: validation
 	clientId := request.ClientId
+	if err := validateClientId(clientId); err != nil {
+		log.Err(err).Msg("invalid client id")
+		return c.String(400, "invalid request")
+	}
+
+	if err := checkPayloadSize(request.Payload); err != nil {
+		log.Err(err).Msg("payload too large")
+		return c.String(400, "invalid request")
+	}
 
 	payload, err := base64Encoding.DecodeString(request.Payload)
 	if err != nil {

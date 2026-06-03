@@ -242,6 +242,30 @@ func TestOpaqueBadPayloads(t *testing.T) {
 			body:   `{"clientId":"test","payload":"!!!invalid-b64!!!"}`,
 			status: 400,
 		},
+		{
+			name:   "register start empty client id",
+			path:   "/api/opaque/register/start",
+			body:   `{"clientId":"","payload":"dGVzdA=="}`,
+			status: 400,
+		},
+		{
+			name:   "login start empty client id",
+			path:   "/api/opaque/login/start",
+			body:   `{"clientId":"","payload":"dGVzdA=="}`,
+			status: 400,
+		},
+		{
+			name:   "register finish empty client id",
+			path:   "/api/opaque/register/finish",
+			body:   `{"clientId":"","payload":"dGVzdA=="}`,
+			status: 400,
+		},
+		{
+			name:   "login finish empty client id",
+			path:   "/api/opaque/login/finish",
+			body:   `{"clientId":"","payload":"dGVzdA=="}`,
+			status: 400,
+		},
 	}
 
 	for _, tc := range tests {
@@ -251,6 +275,52 @@ func TestOpaqueBadPayloads(t *testing.T) {
 			rec := httptest.NewRecorder()
 			srv.ServeHTTP(rec, req)
 			require.Equal(t, tc.status, rec.Code)
+		})
+	}
+}
+
+func TestOpaqueClientIdTooLong(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db)
+
+	longId := strings.Repeat("a", 300)
+	body := `{"clientId":"` + longId + `","payload":"dGVzdA=="}`
+
+	for _, path := range []string{
+		"/api/opaque/register/start",
+		"/api/opaque/register/finish",
+		"/api/opaque/login/start",
+		"/api/opaque/login/finish",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			require.Equal(t, 400, rec.Code)
+		})
+	}
+}
+
+func TestOpaquePayloadTooLarge(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db)
+
+	largePayload := strings.Repeat("a", 70000)
+	body := `{"clientId":"test","payload":"` + largePayload + `"}`
+
+	for _, path := range []string{
+		"/api/opaque/register/start",
+		"/api/opaque/register/finish",
+		"/api/opaque/login/start",
+		"/api/opaque/login/finish",
+	} {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			srv.ServeHTTP(rec, req)
+			require.Equal(t, 400, rec.Code)
 		})
 	}
 }
