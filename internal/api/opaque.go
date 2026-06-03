@@ -12,6 +12,7 @@ import (
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/labstack/echo/v5"
+	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog/log"
 )
 
@@ -70,6 +71,14 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		opaqueServer: opaqueServer,
 		fakeRecord:   fakeRecord,
 	}
+
+	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      5,
+			Burst:     10,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	}))
 
 	e.POST("/register/start", api.registerStart)
 	e.POST("/register/finish", api.registerFinish)
