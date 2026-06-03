@@ -25,12 +25,19 @@ type opaqueApi struct {
 	cache        *ristretto.Cache[string, []byte]
 	loginCache   *ristretto.Cache[string, *opaque.ServerOutput]
 	opaqueServer *opaque.Server
+	fakeRecord   *opaque.ClientRecord
 }
 
 func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 	opaqueServer, err := auth.CreateOpaqueServer(a.DB)
 	if err != nil {
 		log.Err(err).Msg("failed to setup opaque for server")
+		return err
+	}
+
+	fakeRecord, err := auth.ServerConfig().GetFakeRecord([]byte("fake-client"))
+	if err != nil {
+		log.Err(err).Msg("failed to generate fake opaque record")
 		return err
 	}
 
@@ -61,6 +68,7 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		cache:        cache,
 		loginCache:   loginCache,
 		opaqueServer: opaqueServer,
+		fakeRecord:   fakeRecord,
 	}
 
 	e.POST("/register/start", api.registerStart)
@@ -276,7 +284,18 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 		Scan(&encodedCredentialId, &encodedRecord)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return c.String(401, "invalid credentials")
+			ke2, serverOutput, err := api.opaqueServer.GenerateKE2(ke1, api.fakeRecord)
+			if err != nil {
+				log.Err(err).Str("clientId", clientId).Msg("failed to generate fake KE2")
+				return c.String(500, "server error")
+			}
+
+			api.loginCache.SetWithTTL(clientId, serverOutput, 1, time.Minute)
+
+			ke2Bytes := ke2.Serialize()
+			encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
+
+			return c.String(200, encodedResponse)
 		}
 
 		log.Err(err).Str("clientId", clientId).Msg("failed to query opaque user data")

@@ -144,10 +144,35 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 	ke1, err := loginClient.GenerateKE1([]byte("password"))
 	require.NoError(t, err)
 
+	// loginStart returns 200 with a fake KE2 to prevent client enumeration
 	body := `{"clientId":"nonexistent","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+	require.NotEmpty(t, rec.Body.String())
+
+	// loginFinish eventually rejects the fake session with 401
+	ke2Bytes, err := b64.DecodeString(rec.Body.String())
+	require.NoError(t, err)
+	ke2, err := loginClient.Deserialize.KE2(ke2Bytes)
+	require.NoError(t, err)
+
+	// Client will fail to generate KE3 because the fake record's keys
+	// don't match the server's actual key material.
+	_, _, _, err = loginClient.GenerateKE3(ke2, nil, nil)
+	require.Error(t, err)
+
+	// Send a fabricated KE3 to loginFinish
+	fakeKE3 := make([]byte, 64)
+	for i := range fakeKE3 {
+		fakeKE3[i] = byte(i)
+	}
+	body = `{"clientId":"nonexistent","payload":"` + b64.EncodeToString(fakeKE3) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 401, rec.Code)
 }
