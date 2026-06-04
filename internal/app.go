@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/homelab-tool/auth/internal/api"
+	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
@@ -49,8 +50,14 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
+	jwtService, err := auth.NewJWTService(db)
+	if err != nil {
+		return nil, err
+	}
+
 	api := api.Api{
-		DB: db,
+		DB:  db,
+		JWT: jwtService,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {

@@ -3,6 +3,7 @@ package api_test
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -39,9 +40,11 @@ func newTestDB(t *testing.T) (*sql.DB, string) {
 
 func newTestServer(t *testing.T, db *sql.DB) *echo.Echo {
 	t.Helper()
+	jwtService, err := auth.NewJWTService(db)
+	require.NoError(t, err)
 	e := echo.New()
-	a := &api.Api{DB: db}
-	err := a.SetupRoutes(e.Group("/api"))
+	a := &api.Api{DB: db, JWT: jwtService}
+	err = a.SetupRoutes(e.Group("/api"))
 	require.NoError(t, err)
 	return e
 }
@@ -133,7 +136,10 @@ func TestOpaqueFullFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
-	assert.Equal(t, "authenticated!", rec.Body.String())
+	var resp map[string]string
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp["token"])
 }
 
 func TestOpaqueLoginUnknownUser(t *testing.T) {

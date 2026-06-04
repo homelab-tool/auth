@@ -24,9 +24,15 @@ var base64Encoding = base64.RawURLEncoding
 type opaqueApi struct {
 	db           *sql.DB
 	cache        *ristretto.Cache[string, []byte]
-	loginCache   *ristretto.Cache[string, *opaque.ServerOutput]
+	loginCache   *ristretto.Cache[string, *loginState]
 	opaqueServer *opaque.Server
 	fakeRecord   *opaque.ClientRecord
+	jwtService   *auth.JWTService
+}
+
+type loginState struct {
+	serverOutput *opaque.ServerOutput
+	userId       int64
 }
 
 func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
@@ -53,7 +59,7 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		return err
 	}
 
-	loginCache, err := ristretto.NewCache(&ristretto.Config[string, *opaque.ServerOutput]{
+	loginCache, err := ristretto.NewCache(&ristretto.Config[string, *loginState]{
 		NumCounters: 1e6,
 		MaxCost:     1e4,
 		BufferItems: 64,
@@ -70,6 +76,7 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		loginCache:   loginCache,
 		opaqueServer: opaqueServer,
 		fakeRecord:   fakeRecord,
+		jwtService:   a.JWT,
 	}
 
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
@@ -288,9 +295,10 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 
 	var encodedCredentialId string
 	var encodedRecord string
+	var userId int64
 	err = api.db.QueryRowContext(c.Request().Context(),
-		"SELECT credential_id, registration_record FROM opaque_user_data WHERE client_id = ?", clientId).
-		Scan(&encodedCredentialId, &encodedRecord)
+		"SELECT credential_id, registration_record, user_id FROM opaque_user_data WHERE client_id = ?", clientId).
+		Scan(&encodedCredentialId, &encodedRecord, &userId)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ke2, serverOutput, err := api.opaqueServer.GenerateKE2(ke1, api.fakeRecord)
@@ -299,7 +307,7 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 				return c.String(500, "server error")
 			}
 
-			api.loginCache.SetWithTTL(clientId, serverOutput, 1, time.Minute)
+			api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput}, 1, time.Minute)
 
 			ke2Bytes := ke2.Serialize()
 			encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
@@ -341,7 +349,7 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	api.loginCache.SetWithTTL(clientId, serverOutput, 1, time.Minute)
+	api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput, userId: userId}, 1, time.Minute)
 
 	ke2Bytes := ke2.Serialize()
 	encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
@@ -379,17 +387,23 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	serverOutput, found := api.loginCache.Get(clientId)
-	if !found || serverOutput == nil {
+	state, found := api.loginCache.Get(clientId)
+	if !found || state == nil || state.serverOutput == nil {
 		return c.String(400, "invalid request")
 	}
 
-	if err := api.opaqueServer.LoginFinish(ke3, serverOutput.ClientMAC); err != nil {
+	if err := api.opaqueServer.LoginFinish(ke3, state.serverOutput.ClientMAC); err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("login finish failed")
 		return c.String(401, "invalid credentials")
 	}
 
 	api.loginCache.Del(clientId)
 
-	return c.String(200, "authenticated!")
+	token, err := api.jwtService.GenerateToken(state.userId, clientId)
+	if err != nil {
+		log.Err(err).Str("clientId", clientId).Msg("failed to generate jwt")
+		return c.String(500, "server error")
+	}
+
+	return c.JSON(200, map[string]string{"token": token})
 }
