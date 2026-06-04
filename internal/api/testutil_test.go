@@ -60,6 +60,9 @@ func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
 	jwtService, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
+	webAuthnSvc, err := auth.NewWebAuthnService()
+	require.NoError(t, err)
+
 	userSvc := service.NewUserService(db)
 	opaqueSvc := service.NewOpaqueService(db)
 	credentialSvc := service.NewCredentialService(db)
@@ -68,6 +71,7 @@ func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
 	a := &api.Api{
 		DB:              db,
 		JWT:             jwtService,
+		WebAuthn:        webAuthnSvc,
 		Users:           userSvc,
 		Opaque:          opaqueSvc,
 		Credentials:     credentialSvc,

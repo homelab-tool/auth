@@ -168,6 +168,7 @@ func (api *opaqueApi) registerStart(c *echo.Context) error {
 
 	credentialId := opaque.RandomBytes(64)
 	api.cache.SetWithTTL(clientId, credentialId, 1, time.Minute)
+	api.cache.Wait()
 
 	registrationResponse, err := api.opaqueServer.RegistrationResponse(registrationRequest, credentialId, nil)
 	if err != nil {
@@ -237,6 +238,7 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 			}
 
 			api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput}, 1, time.Minute)
+			api.loginCache.Wait()
 
 			ke2Bytes := ke2.Serialize()
 			encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
@@ -279,6 +281,7 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 	}
 
 	api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput, userId: data.UserID}, 1, time.Minute)
+	api.loginCache.Wait()
 
 	ke2Bytes := ke2.Serialize()
 	encodedResponse := base64Encoding.EncodeToString(ke2Bytes)

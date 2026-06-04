@@ -117,6 +117,7 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 	}
 
 	api.cache.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: userID}, 1, 2*time.Minute)
+	api.cache.Wait()
 
 	return c.JSON(200, creation)
 }
@@ -193,6 +194,7 @@ func (api *webauthnApi) loginStart(c *echo.Context) error {
 	}
 
 	api.cache.SetWithTTL(session.Challenge, &webauthnSession{session: session}, 1, 2*time.Minute)
+	api.cache.Wait()
 
 	return c.JSON(200, assertion)
 }

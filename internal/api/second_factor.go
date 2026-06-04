@@ -79,6 +79,7 @@ func (h *secondFactorHandler) checkPending(userID int64, clientID string) (*seco
 
 	sessionID := generateSessionID()
 	h.pending2FA.SetWithTTL(sessionID, &pending2FAState{userID: userID, clientID: clientID}, 1, 5*time.Minute)
+	h.pending2FA.Wait()
 
 	return &secondFactorResult{
 		Requires2FA: true,
@@ -124,6 +125,7 @@ func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
 	}
 
 	h.webauthn2FA.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: pending.userID}, 1, 2*time.Minute)
+	h.webauthn2FA.Wait()
 
 	return c.JSON(200, assertion)
 }
@@ -231,6 +233,7 @@ func (h *secondFactorHandler) register2FAStart(c *echo.Context) error {
 	}
 
 	h.webauthn2FA.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: userID}, 1, 2*time.Minute)
+	h.webauthn2FA.Wait()
 
 	return c.JSON(200, creation)
 }

@@ -1,0 +1,201 @@
+package api_test
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/descope/virtualwebauthn"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/homelab-tool/auth/internal/service"
+)
+
+func TestSecondFactorRegisterFullFlow(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db, &testServerOpts{
+		RPID:            "localhost",
+		RPOrigins:       "http://localhost:1337",
+		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
+	})
+
+	rp := virtualwebauthn.RelyingParty{
+		Name:   "Homelab Auth",
+		ID:     "localhost",
+		Origin: "http://localhost:1337",
+	}
+	authenticator := virtualwebauthn.NewAuthenticator()
+	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
+
+	token := registerAndLogin(t, srv, "2fa-user")
+
+	// Register WebAuthn 2FA start
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	pk := extractPublicKey(t, rec.Body.String())
+	attestationOptions, err := virtualwebauthn.ParseAttestationOptions(pk)
+	require.NoError(t, err)
+
+	attestationResponse := virtualwebauthn.CreateAttestationResponse(rp, authenticator, cred, *attestationOptions)
+	require.NotEmpty(t, attestationResponse)
+
+	// Register WebAuthn 2FA finish
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(attestationResponse))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	var finishResp map[string]string
+	err = json.Unmarshal(rec.Body.Bytes(), &finishResp)
+	require.NoError(t, err)
+	assert.Equal(t, "ok", finishResp["status"])
+
+	// Verify 2FA is enabled in DB
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = 1 AND method = 'webauthn' AND enabled = 1").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	authenticator.AddCredential(cred)
+}
+
+func TestSecondFactorLoginFullFlow(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db, &testServerOpts{
+		RPID:            "localhost",
+		RPOrigins:       "http://localhost:1337",
+		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
+	})
+
+	rp := virtualwebauthn.RelyingParty{
+		Name:   "Homelab Auth",
+		ID:     "localhost",
+		Origin: "http://localhost:1337",
+	}
+	authenticator := virtualwebauthn.NewAuthenticator()
+	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
+
+	// Register OPAQUE user + login to get JWT
+	token := registerAndLogin(t, srv, "2fa-user2")
+
+	// Register WebAuthn 2FA
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	pk := extractPublicKey(t, rec.Body.String())
+	attestationOptions, err := virtualwebauthn.ParseAttestationOptions(pk)
+	require.NoError(t, err)
+
+	attestationResponse := virtualwebauthn.CreateAttestationResponse(rp, authenticator, cred, *attestationOptions)
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(attestationResponse))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	authenticator.AddCredential(cred)
+
+	// Now login with OPAQUE — should trigger 2FA
+	client := newOpaqueClient(t)
+	password := []byte("super-secret-password")
+
+	ke1, err := client.GenerateKE1(password)
+	require.NoError(t, err)
+
+	body := `{"clientId":"2fa-user2","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	ke2Bytes, err := b64.DecodeString(rec.Body.String())
+	require.NoError(t, err)
+	ke2, err := client.Deserialize.KE2(ke2Bytes)
+	require.NoError(t, err)
+	ke3, _, _, err := client.GenerateKE3(ke2, []byte("2fa-user2"), nil)
+	require.NoError(t, err)
+
+	body = `{"clientId":"2fa-user2","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	var loginResp map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
+	require.NoError(t, err)
+	assert.Equal(t, "2fa_required", loginResp["status"])
+	sessionID, ok := loginResp["session_id"].(string)
+	require.True(t, ok)
+	assert.NotEmpty(t, sessionID)
+
+	// Complete 2FA with WebAuthn
+	body = `{"sessionId":"` + sessionID + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	pk = extractPublicKey(t, rec.Body.String())
+	assertionOptions, err := virtualwebauthn.ParseAssertionOptions(pk)
+	require.NoError(t, err)
+
+	assertionResponse := virtualwebauthn.CreateAssertionResponse(rp, authenticator, cred, *assertionOptions)
+	assertionResponse = addUserHandle(t, assertionResponse, 1)
+
+	body = `{"sessionId":"` + sessionID + `",` + assertionResponse[1:]
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	var finalResp map[string]string
+	err = json.Unmarshal(rec.Body.Bytes(), &finalResp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, finalResp["token"])
+}
+
+func TestSecondFactorRegister2FAFinishErrors(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db, &testServerOpts{
+		RPID:            "localhost",
+		RPOrigins:       "http://localhost:1337",
+		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
+	})
+
+	// Missing JWT should return 401
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 401, rec.Code)
+
+	// With JWT but no active 2FA session should return 400
+	token := registerAndLogin(t, srv, "2fa-error-user")
+
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(`{"id":"test"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 400, rec.Code)
+}

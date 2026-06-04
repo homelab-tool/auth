@@ -5,6 +5,7 @@ go 1.26.1
 require (
 	github.com/bytemare/ksf v0.5.0
 	github.com/bytemare/opaque v0.18.0
+	github.com/descope/virtualwebauthn v1.0.5
 	github.com/dgraph-io/ristretto/v2 v2.4.0
 	github.com/go-webauthn/webauthn v0.17.4
 	github.com/golang-jwt/jwt/v5 v5.3.1
