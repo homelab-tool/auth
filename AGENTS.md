@@ -8,8 +8,10 @@ Go + TypeScript monorepo. Echo v5 HTTP server (SQLite-backed). Vite frontend at 
 
 | What | Command |
 |---|---|
-| All Go tests | `make test` (runs `go test -v -count=1 ./...`) |
-| Single pkg tests | `go test -v -count=1 ./internal/service/...` |
+| All Go tests | `make test` (uses `gotestsum`) |
+| All tests (verbose) | `make test-verbose` |
+| With race detector | `make test-race` |
+| Single pkg | `gotestsum -- ./internal/service/...` |
 | Run server | `go run ./cmd/auth/...` |
 | Frontend dev | `pnpm --filter frontend dev` (via Vite) |
 | Frontend lint | `pnpm --filter frontend oxlint` (correctness errors only) |
@@ -21,8 +23,9 @@ Go + TypeScript monorepo. Echo v5 HTTP server (SQLite-backed). Vite frontend at 
 - **`cmd/auth/main.go`** — entrypoint, listens on `:1337`
 - **`internal/app.go`** — wires Echo, DB, services, routes at `/api`
 - **`internal/database.go`** — SQLite, embedded migrations, WAL journal + foreign keys
-- **`internal/api/`** — HTTP handlers
-- **`internal/auth/`** — crypto/low-level
+- **`internal/api/`** — HTTP handlers for `/api` routes
+- **`internal/caddy/`** — Caddy `forward_auth` endpoint at `/caddy/forward_auth`
+- **`internal/auth/`** — crypto/low-level (JWT, OPAQUE, WebAuthn)
 - **`internal/service/`** — business logic layer
 - **`internal/migrations/`** — SQLite migrations
 - **`frontend/`** — Vite + TypeScript

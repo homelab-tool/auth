@@ -6,6 +6,7 @@ import (
 
 	"github.com/homelab-tool/auth/internal/api"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/caddy"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -81,6 +82,9 @@ func CreateApp() (*App, error) {
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {
 		return nil, err
 	}
+
+	caddyHandler := caddy.NewHandler(jwtService)
+	caddyHandler.SetupRoutes(e.Group("/caddy"))
 
 	app := &App{
 		Router: e,
