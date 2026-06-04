@@ -16,6 +16,7 @@ type Api struct {
 	Opaque          *service.OpaqueService
 	Credentials     *service.CredentialService
 	SecondFactorSvc service.SecondFactorService
+	TOTP            *service.TOTPService
 }
 
 func (api *Api) SetupRoutes(e *echo.Group) error {

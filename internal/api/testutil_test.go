@@ -66,6 +66,7 @@ func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
 	userSvc := service.NewUserService(db)
 	opaqueSvc := service.NewOpaqueService(db)
 	credentialSvc := service.NewCredentialService(db)
+	totpSvc := service.NewTOTPService(db)
 
 	e := echo.New()
 	a := &api.Api{
@@ -76,6 +77,7 @@ func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
 		Opaque:          opaqueSvc,
 		Credentials:     credentialSvc,
 		SecondFactorSvc: secondFactorSvc,
+		TOTP:            totpSvc,
 	}
 	err = a.SetupRoutes(e.Group("/api"))
 	require.NoError(t, err)

@@ -62,7 +62,7 @@ func (a *Api) setupOpaque(e *echo.Group) error {
 		return err
 	}
 
-	sfHandler, err := newSecondFactorHandler(a.Users, a.Credentials, a.JWT, a.WebAuthn, a.SecondFactorSvc)
+	sfHandler, err := newSecondFactorHandler(a.Users, a.Credentials, a.JWT, a.WebAuthn, a.SecondFactorSvc, a.TOTP)
 	if err != nil {
 		return err
 	}

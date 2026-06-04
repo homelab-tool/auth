@@ -33,11 +33,12 @@ type secondFactorHandler struct {
 	jwtService        *auth.JWTService
 	webAuthn          *auth.WebAuthnService
 	secondFactorSvc   service.SecondFactorService
+	totpService       *service.TOTPService
 	pending2FA        *ristretto.Cache[string, *pending2FAState]
 	webauthn2FA       *ristretto.Cache[string, *webauthnSession]
 }
 
-func newSecondFactorHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc service.SecondFactorService) (*secondFactorHandler, error) {
+func newSecondFactorHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc service.SecondFactorService, totpSvc *service.TOTPService) (*secondFactorHandler, error) {
 	pending2FA, err := newDefaultCache[*pending2FAState]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pending 2fa cache: %w", err)
@@ -54,6 +55,7 @@ func newSecondFactorHandler(userService *service.UserService, credentialService 
 		jwtService:        jwtService,
 		webAuthn:          webAuthn,
 		secondFactorSvc:   svc,
+		totpService:       totpSvc,
 		pending2FA:        pending2FA,
 		webauthn2FA:       webauthn2FA,
 	}, nil
@@ -91,11 +93,14 @@ func (h *secondFactorHandler) checkPending(userID int64, clientID string) (*seco
 func (h *secondFactorHandler) setupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
 	e.POST("/login/2fa/webauthn/start", h.login2FAStart)
 	e.POST("/login/2fa/webauthn/finish", h.login2FAFinish)
+	e.POST("/login/2fa/totp", h.login2FATOTP)
 
 	reg := e.Group("/register/2fa")
 	reg.Use(jwtMiddleware)
 	reg.POST("/webauthn/start", h.register2FAStart)
 	reg.POST("/webauthn/finish", h.register2FAFinish)
+	reg.POST("/totp/generate", h.register2FATOTPGenerate)
+	reg.POST("/totp/verify", h.register2FATOTPVerify)
 }
 
 func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
@@ -299,6 +304,109 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 	}
 
 	h.webauthn2FA.Del(challenge)
+
+	return c.JSON(200, map[string]string{"status": "ok"})
+}
+
+func (h *secondFactorHandler) login2FATOTP(c *echo.Context) error {
+	var request struct {
+		SessionID string `json:"sessionId"`
+		Code      string `json:"code"`
+	}
+	if err := c.Bind(&request); err != nil {
+		log.Err(err).Msg("failed to bind totp 2fa request")
+		return c.String(400, "invalid request")
+	}
+
+	if request.Code == "" {
+		return c.String(400, "invalid request")
+	}
+
+	pending, found := h.pending2FA.Get(request.SessionID)
+	if !found || pending == nil {
+		return c.String(400, "invalid request")
+	}
+
+	valid, err := h.totpService.ValidateCode(c.Request().Context(), pending.userID, request.Code)
+	if err != nil {
+		log.Err(err).Int64("userID", pending.userID).Msg("failed to validate totp code")
+		return c.String(500, "server error")
+	}
+	if !valid {
+		return c.String(401, "invalid credentials")
+	}
+
+	h.pending2FA.Del(request.SessionID)
+
+	token, err := h.jwtService.GenerateToken(pending.userID, pending.clientID)
+	if err != nil {
+		log.Err(err).Msg("failed to generate jwt after 2fa")
+		return c.String(500, "server error")
+	}
+
+	return c.JSON(200, map[string]string{"token": token})
+}
+
+func (h *secondFactorHandler) register2FATOTPGenerate(c *echo.Context) error {
+	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := parseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	displayName, err := h.userService.GetDisplayName(c.Request().Context(), userID)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to query display name for totp registration")
+		return c.String(500, "server error")
+	}
+
+	result, err := h.totpService.GenerateSecret(c.Request().Context(), userID, displayName, "auth")
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to generate totp secret")
+		return c.String(500, "server error")
+	}
+
+	return c.JSON(200, result)
+}
+
+func (h *secondFactorHandler) register2FATOTPVerify(c *echo.Context) error {
+	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := parseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	var request struct {
+		Code string `json:"code"`
+	}
+	if err := c.Bind(&request); err != nil {
+		log.Err(err).Msg("failed to bind totp verify request")
+		return c.String(400, "invalid request")
+	}
+
+	if request.Code == "" {
+		return c.String(400, "invalid request")
+	}
+
+	var verifyOK bool
+	verifyOK, err = h.totpService.VerifyAndEnable(c.Request().Context(), userID, request.Code)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to verify and enable totp")
+		return c.String(500, "server error")
+	}
+	if !verifyOK {
+		return c.String(400, "invalid code")
+	}
 
 	return c.JSON(200, map[string]string{"status": "ok"})
 }

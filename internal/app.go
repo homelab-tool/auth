@@ -65,6 +65,7 @@ func CreateApp() (*App, error) {
 	opaqueSvc := service.NewOpaqueService(db)
 	credentialSvc := service.NewCredentialService(db)
 	secondFactorSvc := service.NewDefaultSecondFactorService(db)
+	totpSvc := service.NewTOTPService(db)
 
 	api := api.Api{
 		DB:              db,
@@ -74,6 +75,7 @@ func CreateApp() (*App, error) {
 		Opaque:          opaqueSvc,
 		Credentials:     credentialSvc,
 		SecondFactorSvc: secondFactorSvc,
+		TOTP:            totpSvc,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {
