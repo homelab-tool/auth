@@ -40,6 +40,9 @@ func newTestDB(t *testing.T) (*sql.DB, string) {
 
 func newTestServer(t *testing.T, db *sql.DB) *echo.Echo {
 	t.Helper()
+	t.Setenv("WEBAUTHN_RPID", "localhost")
+	t.Setenv("WEBAUTHN_RP_ORIGINS", "http://localhost:1337")
+
 	jwtService, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 	e := echo.New()

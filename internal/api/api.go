@@ -17,6 +17,10 @@ func (api *Api) SetupRoutes(e *echo.Group) error {
 		return err
 	}
 
+	if err := api.setupWebAuthn(api.DB, e.Group("/webauthn")); err != nil {
+		return err
+	}
+
 	e.GET("/whoami", api.whoami, jwtMiddleware(api.JWT))
 
 	return nil

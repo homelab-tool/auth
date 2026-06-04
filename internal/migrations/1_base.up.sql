@@ -17,5 +17,21 @@ CREATE TABLE opaque_user_data (
   registration_record TEXT NOT NULL,
   user_id INTEGER NOT NULL REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE webauthn_credentials (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  credential_id    BLOB NOT NULL UNIQUE,
+  public_key       BLOB NOT NULL,
+  attestation_type TEXT NOT NULL,
+  transport        TEXT NOT NULL DEFAULT '',
+  aaguid           BLOB,
+  sign_count       INTEGER NOT NULL DEFAULT 0,
+  clone_warning    INTEGER NOT NULL DEFAULT 0,
+  backup_eligible  INTEGER NOT NULL DEFAULT 0,
+  backup_state     INTEGER NOT NULL DEFAULT 0,
+  created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  last_used_at     TEXT
 )
 
