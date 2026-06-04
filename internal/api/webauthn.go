@@ -274,8 +274,12 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 }
 
 func (api *webauthnApi) loadWebAuthnUser(userID int64) (*auth.WebAuthnUser, error) {
+	return loadWebAuthnUser(api.db, userID)
+}
+
+func loadWebAuthnUser(db *sql.DB, userID int64) (*auth.WebAuthnUser, error) {
 	var displayName string
-	err := api.db.QueryRow("SELECT display_name FROM users WHERE id = ?", userID).Scan(&displayName)
+	err := db.QueryRow("SELECT display_name FROM users WHERE id = ?", userID).Scan(&displayName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
@@ -285,7 +289,7 @@ func (api *webauthnApi) loadWebAuthnUser(userID int64) (*auth.WebAuthnUser, erro
 		DisplayName: displayName,
 	}
 
-	rows, err := api.db.Query(
+	rows, err := db.Query(
 		`SELECT credential_id, public_key, attestation_type, transport, aaguid,
 		        sign_count, clone_warning, backup_eligible, backup_state
 		 FROM webauthn_credentials WHERE user_id = ?`, userID)
@@ -330,13 +334,21 @@ func (api *webauthnApi) loadWebAuthnUser(userID int64) (*auth.WebAuthnUser, erro
 }
 
 func (api *webauthnApi) persistCredential(userID int64, credential *webauthn.Credential) error {
+	return persistCredential(api.db, userID, credential)
+}
+
+func (api *webauthnApi) updateCredential(credential *webauthn.Credential) error {
+	return updateCredential(api.db, credential)
+}
+
+func persistCredential(db *sql.DB, userID int64, credential *webauthn.Credential) error {
 	transportStrs := make([]string, len(credential.Transport))
 	for i, t := range credential.Transport {
 		transportStrs[i] = string(t)
 	}
 	transportStr := strings.Join(transportStrs, ",")
 
-	_, err := api.db.Exec(
+	_, err := db.Exec(
 		`INSERT INTO webauthn_credentials
 		 (user_id, credential_id, public_key, attestation_type, transport, aaguid,
 		  sign_count, clone_warning, backup_eligible, backup_state)
@@ -355,8 +367,8 @@ func (api *webauthnApi) persistCredential(userID int64, credential *webauthn.Cre
 	return err
 }
 
-func (api *webauthnApi) updateCredential(credential *webauthn.Credential) error {
-	_, err := api.db.Exec(
+func updateCredential(db *sql.DB, credential *webauthn.Credential) error {
+	_, err := db.Exec(
 		`UPDATE webauthn_credentials
 		 SET sign_count = ?, clone_warning = ?, backup_state = ?, last_used_at = CURRENT_TIMESTAMP
 		 WHERE credential_id = ? AND sign_count < ?`,

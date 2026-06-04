@@ -33,5 +33,14 @@ CREATE TABLE webauthn_credentials (
   backup_state     INTEGER NOT NULL DEFAULT 0,
   created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used_at     TEXT
+);
+
+CREATE TABLE user_second_factors (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  method     TEXT NOT NULL CHECK (method IN ('webauthn', 'totp')),
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(user_id, method)
 )
 

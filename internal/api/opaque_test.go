@@ -40,13 +40,18 @@ func newTestDB(t *testing.T) (*sql.DB, string) {
 
 func newTestServer(t *testing.T, db *sql.DB) *echo.Echo {
 	t.Helper()
+	return newTestServerWith2FA(t, db, nil)
+}
+
+func newTestServerWith2FA(t *testing.T, db *sql.DB, secondFactorSvc api.SecondFactorService) *echo.Echo {
+	t.Helper()
 	t.Setenv("WEBAUTHN_RPID", "localhost")
 	t.Setenv("WEBAUTHN_RP_ORIGINS", "http://localhost:1337")
 
 	jwtService, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 	e := echo.New()
-	a := &api.Api{DB: db, JWT: jwtService}
+	a := &api.Api{DB: db, JWT: jwtService, SecondFactorSvc: secondFactorSvc}
 	err = a.SetupRoutes(e.Group("/api"))
 	require.NoError(t, err)
 	return e
@@ -334,6 +339,168 @@ func TestOpaqueClientIdTooLong(t *testing.T) {
 			require.Equal(t, 400, rec.Code)
 		})
 	}
+}
+
+type mockSecondFactor struct {
+	required bool
+	methods  []string
+}
+
+func (m *mockSecondFactor) Required(_ int64) (bool, error) {
+	return m.required, nil
+}
+
+func (m *mockSecondFactor) Methods(_ int64) ([]string, error) {
+	return m.methods, nil
+}
+
+func TestOpaqueLogin2FARequired(t *testing.T) {
+	db, _ := newTestDB(t)
+	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
+	srv := newTestServerWith2FA(t, db, svc)
+	client := newOpaqueClient(t)
+	clientId := "testuser"
+	password := []byte("super-secret-password")
+
+	// Register
+	regInit, err := client.RegistrationInit(password)
+	require.NoError(t, err)
+	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	regRespBytes, _ := b64.DecodeString(rec.Body.String())
+	regResp, _ := client.Deserialize.RegistrationResponse(regRespBytes)
+	record, _, _ := client.RegistrationFinalize(regResp, []byte(clientId), nil)
+
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	// Login
+	loginClient := newOpaqueClient(t)
+	ke1, err := loginClient.GenerateKE1(password)
+	require.NoError(t, err)
+
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	ke2Bytes, _ := b64.DecodeString(rec.Body.String())
+	ke2, _ := loginClient.Deserialize.KE2(ke2Bytes)
+	ke3, _, _, _ := loginClient.GenerateKE3(ke2, []byte(clientId), nil)
+
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	var resp map[string]any
+	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.Equal(t, "2fa_required", resp["status"])
+	assert.NotEmpty(t, resp["session_id"])
+	assert.Equal(t, []any{"webauthn"}, resp["methods"])
+}
+
+func TestOpaqueLogin2FANotRequired(t *testing.T) {
+	db, _ := newTestDB(t)
+	svc := &mockSecondFactor{required: false}
+	srv := newTestServerWith2FA(t, db, svc)
+	client := newOpaqueClient(t)
+	clientId := "testuser"
+	password := []byte("super-secret-password")
+
+	// Register
+	regInit, _ := client.RegistrationInit(password)
+	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	regRespBytes, _ := b64.DecodeString(rec.Body.String())
+	regResp, _ := client.Deserialize.RegistrationResponse(regRespBytes)
+	record, _, _ := client.RegistrationFinalize(regResp, []byte(clientId), nil)
+
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	// Login (should get JWT directly since 2FA not required)
+	loginClient := newOpaqueClient(t)
+	ke1, _ := loginClient.GenerateKE1(password)
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	ke2Bytes, _ := b64.DecodeString(rec.Body.String())
+	ke2, _ := loginClient.Deserialize.KE2(ke2Bytes)
+	ke3, _, _, _ := loginClient.GenerateKE3(ke2, []byte(clientId), nil)
+
+	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 200, rec.Code)
+
+	var resp map[string]string
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp["token"])
+}
+
+func TestOpaqueLogin2FABadSession(t *testing.T) {
+	db, _ := newTestDB(t)
+	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
+	srv := newTestServerWith2FA(t, db, svc)
+
+	// Missing session ID
+	body := `{}`
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 400, rec.Code)
+
+	// Unknown session ID
+	body = `{"sessionId":"nonexistent"}`
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 400, rec.Code)
+}
+
+func TestOpaqueRegister2FARequiresAuth(t *testing.T) {
+	db, _ := newTestDB(t)
+	srv := newTestServer(t, db)
+
+	body := `{"displayName":"test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+	require.Equal(t, 401, rec.Code)
 }
 
 func TestOpaquePayloadTooLarge(t *testing.T) {

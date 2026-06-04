@@ -55,9 +55,15 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
+	webAuthnSvc, err := auth.NewWebAuthnService()
+	if err != nil {
+		return nil, err
+	}
+
 	api := api.Api{
-		DB:  db,
-		JWT: jwtService,
+		DB:       db,
+		JWT:      jwtService,
+		WebAuthn: webAuthnSvc,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {

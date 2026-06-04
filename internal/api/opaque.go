@@ -28,6 +28,7 @@ type opaqueApi struct {
 	opaqueServer *opaque.Server
 	fakeRecord   *opaque.ClientRecord
 	jwtService   *auth.JWTService
+	secondFactor *secondFactorHandler
 }
 
 type loginState struct {
@@ -35,7 +36,7 @@ type loginState struct {
 	userId       int64
 }
 
-func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
+func (a *Api) setupOpaque(db *sql.DB, e *echo.Group, webAuthn *auth.WebAuthnService, secondFactorSvc SecondFactorService) error {
 	opaqueServer, err := auth.CreateOpaqueServer(a.DB)
 	if err != nil {
 		log.Err(err).Msg("failed to setup opaque for server")
@@ -70,6 +71,11 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		return err
 	}
 
+	sfHandler, err := newSecondFactorHandler(db, a.JWT, webAuthn, secondFactorSvc)
+	if err != nil {
+		return err
+	}
+
 	api := opaqueApi{
 		db:           db,
 		cache:        cache,
@@ -77,6 +83,7 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 		opaqueServer: opaqueServer,
 		fakeRecord:   fakeRecord,
 		jwtService:   a.JWT,
+		secondFactor: sfHandler,
 	}
 
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
@@ -91,6 +98,8 @@ func (a *Api) setupOpaque(db *sql.DB, e *echo.Group) error {
 	e.POST("/register/finish", api.registerFinish)
 	e.POST("/login/start", api.loginStart)
 	e.POST("/login/finish", api.loginFinish)
+
+	sfHandler.setupRoutes(e, jwtMiddleware(a.JWT))
 
 	return nil
 }
@@ -398,6 +407,22 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 	}
 
 	api.loginCache.Del(clientId)
+
+	if api.secondFactor != nil {
+		result, err := api.secondFactor.checkPending(state.userId, clientId)
+		if err != nil {
+			log.Err(err).Int64("userId", state.userId).Msg("failed to check 2fa requirement")
+			return c.String(500, "server error")
+		}
+
+		if result.Requires2FA {
+			return c.JSON(200, map[string]any{
+				"status":     "2fa_required",
+				"session_id": result.SessionID,
+				"methods":    result.Methods,
+			})
+		}
+	}
 
 	token, err := api.jwtService.GenerateToken(state.userId, clientId)
 	if err != nil {
