@@ -78,7 +78,7 @@ func registerAndLogin(t *testing.T, srv *echo.Echo, clientId string) string {
 
 func TestWhoamiSuccess(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newTestServer(t, db)
+	srv := newTestServer(t, db, nil)
 	token := registerAndLogin(t, srv, "whoami-user")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
@@ -95,7 +95,7 @@ func TestWhoamiSuccess(t *testing.T) {
 
 func TestWhoamiNoAuth(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newTestServer(t, db)
+	srv := newTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	rec := httptest.NewRecorder()
@@ -105,7 +105,7 @@ func TestWhoamiNoAuth(t *testing.T) {
 
 func TestWhoamiInvalidToken(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newTestServer(t, db)
+	srv := newTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	req.Header.Set("Authorization", "Bearer invalidtoken")
@@ -116,7 +116,7 @@ func TestWhoamiInvalidToken(t *testing.T) {
 
 func TestWhoamiWrongScheme(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newTestServer(t, db)
+	srv := newTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")

@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"database/sql"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -13,31 +12,13 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/protocol/webauthncose"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/homelab-tool/auth/internal/api"
-	"github.com/homelab-tool/auth/internal/auth"
 )
-
-func newWebAuthnTestServer(t *testing.T, db *sql.DB) *echo.Echo {
-	t.Helper()
-	t.Setenv("WEBAUTHN_RPID", "example.org")
-	t.Setenv("WEBAUTHN_RP_ORIGINS", "https://example.org")
-
-	jwtService, err := auth.NewJWTService(db)
-	require.NoError(t, err)
-	e := echo.New()
-	a := &api.Api{DB: db, JWT: jwtService}
-	err = a.SetupRoutes(e.Group("/api"))
-	require.NoError(t, err)
-	return e
-}
 
 func TestWebAuthnBadPayloads(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newWebAuthnTestServer(t, db)
+	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	tests := []struct {
 		name   string
@@ -94,7 +75,7 @@ func TestWebAuthnBadPayloads(t *testing.T) {
 
 func TestWebAuthnRegisterStart(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newWebAuthnTestServer(t, db)
+	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	body := `{"displayName":"testuser"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/start", strings.NewReader(body))
@@ -117,7 +98,7 @@ func TestWebAuthnRegisterStart(t *testing.T) {
 
 func TestWebAuthnLoginStart(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newWebAuthnTestServer(t, db)
+	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/login/start", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -134,7 +115,7 @@ func TestWebAuthnLoginStart(t *testing.T) {
 
 func TestWebAuthnRegisterStartDisplayNameTooLong(t *testing.T) {
 	db, _ := newTestDB(t)
-	srv := newWebAuthnTestServer(t, db)
+	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	longName := strings.Repeat("a", 300)
 	body := `{"displayName":"` + longName + `"}`
@@ -146,9 +127,6 @@ func TestWebAuthnRegisterStartDisplayNameTooLong(t *testing.T) {
 }
 
 func TestWebAuthnFullFlow(t *testing.T) {
-	db, _ := newTestDB(t)
-	_ = newWebAuthnTestServer(t, db)
-
 	// Registration test vectors from W3C spec (None ES256)
 	// See: https://www.w3.org/TR/webauthn-3/#sctn-test-vectors-none-es256
 	credentialIDHex := "f91f391db4c9b2fde0ea70189cba3fb63f579ba6122b33ad94ff3ec330084be4"

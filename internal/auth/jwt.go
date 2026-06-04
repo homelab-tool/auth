@@ -76,7 +76,7 @@ func loadJWTSecret(db *sql.DB) ([]byte, error) {
 		return nil, fmt.Errorf("failed to generate jwt secret: %w", err)
 	}
 
-	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES ($1, $2)", jwtSecretName, secret)
+	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", jwtSecretName, secret)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store jwt secret: %w", err)
 	}

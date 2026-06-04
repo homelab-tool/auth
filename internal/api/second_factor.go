@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/rand"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,14 +11,10 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
-
-type SecondFactorService interface {
-	Required(userID int64) (bool, error)
-	Methods(userID int64) ([]string, error)
-}
 
 type pending2FAState struct {
 	userID   int64
@@ -33,40 +28,34 @@ type secondFactorResult struct {
 }
 
 type secondFactorHandler struct {
-	db              *sql.DB
-	jwtService      *auth.JWTService
-	webAuthn        *auth.WebAuthnService
-	secondFactorSvc SecondFactorService
-	pending2FA      *ristretto.Cache[string, *pending2FAState]
-	webauthn2FA     *ristretto.Cache[string, *webauthnSession]
+	userService       *service.UserService
+	credentialService *service.CredentialService
+	jwtService        *auth.JWTService
+	webAuthn          *auth.WebAuthnService
+	secondFactorSvc   service.SecondFactorService
+	pending2FA        *ristretto.Cache[string, *pending2FAState]
+	webauthn2FA       *ristretto.Cache[string, *webauthnSession]
 }
 
-func newSecondFactorHandler(db *sql.DB, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc SecondFactorService) (*secondFactorHandler, error) {
-	pending2FA, err := ristretto.NewCache(&ristretto.Config[string, *pending2FAState]{
-		NumCounters: 1e6,
-		MaxCost:     1e4,
-		BufferItems: 64,
-	})
+func newSecondFactorHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc service.SecondFactorService) (*secondFactorHandler, error) {
+	pending2FA, err := newDefaultCache[*pending2FAState]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pending 2fa cache: %w", err)
 	}
 
-	webauthn2FA, err := ristretto.NewCache(&ristretto.Config[string, *webauthnSession]{
-		NumCounters: 1e6,
-		MaxCost:     1e4,
-		BufferItems: 64,
-	})
+	webauthn2FA, err := newDefaultCache[*webauthnSession]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webauthn 2fa cache: %w", err)
 	}
 
 	return &secondFactorHandler{
-		db:              db,
-		jwtService:      jwtService,
-		webAuthn:        webAuthn,
-		secondFactorSvc: svc,
-		pending2FA:      pending2FA,
-		webauthn2FA:     webauthn2FA,
+		userService:       userService,
+		credentialService: credentialService,
+		jwtService:        jwtService,
+		webAuthn:          webAuthn,
+		secondFactorSvc:   svc,
+		pending2FA:        pending2FA,
+		webauthn2FA:       webauthn2FA,
 	}, nil
 }
 
@@ -122,7 +111,7 @@ func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := loadWebAuthnUser(h.db, pending.userID)
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), pending.userID)
 	if err != nil {
 		log.Err(err).Int64("userId", pending.userID).Msg("failed to load user for 2fa")
 		return c.String(500, "server error")
@@ -179,7 +168,7 @@ func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := loadWebAuthnUser(h.db, ws.userID)
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), ws.userID)
 	if err != nil {
 		log.Err(err).Int64("userID", ws.userID).Msg("failed to load user for 2fa verification")
 		h.webauthn2FA.Del(challenge)
@@ -193,7 +182,7 @@ func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
 		return c.String(401, "invalid credentials")
 	}
 
-	if err := updateCredential(h.db, validatedCredential); err != nil {
+	if err := h.credentialService.Update(c.Request().Context(), validatedCredential); err != nil {
 		log.Err(err).Msg("failed to update credential after 2fa")
 	}
 
@@ -221,8 +210,7 @@ func (h *secondFactorHandler) register2FAStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	var displayName string
-	err = h.db.QueryRow("SELECT display_name FROM users WHERE id = ?", userID).Scan(&displayName)
+	displayName, err := h.userService.GetDisplayName(c.Request().Context(), userID)
 	if err != nil {
 		log.Err(err).Int64("userID", userID).Msg("failed to query display name for 2fa registration")
 		return c.String(500, "server error")
@@ -281,7 +269,7 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := loadWebAuthnUser(h.db, userID)
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), userID)
 	if err != nil {
 		log.Err(err).Int64("userID", userID).Msg("failed to load user for 2fa registration finish")
 		h.webauthn2FA.Del(challenge)
@@ -295,17 +283,13 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := persistCredential(h.db, userID, credential); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), userID, credential); err != nil {
 		log.Err(err).Msg("failed to persist credential for 2fa")
 		h.webauthn2FA.Del(challenge)
 		return c.String(500, "server error")
 	}
 
-	_, err = h.db.Exec(
-		`INSERT INTO user_second_factors (user_id, method, enabled) VALUES (?, 'webauthn', 1)
-		 ON CONFLICT(user_id, method) DO UPDATE SET enabled = 1`,
-		userID)
-	if err != nil {
+	if err := h.credentialService.EnableSecondFactor(c.Request().Context(), userID); err != nil {
 		log.Err(err).Int64("userID", userID).Msg("failed to enable webauthn 2fa")
 		h.webauthn2FA.Del(challenge)
 		return c.String(500, "server error")

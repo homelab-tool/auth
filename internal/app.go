@@ -6,6 +6,7 @@ import (
 
 	"github.com/homelab-tool/auth/internal/api"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
@@ -60,10 +61,19 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
+	userSvc := service.NewUserService(db)
+	opaqueSvc := service.NewOpaqueService(db)
+	credentialSvc := service.NewCredentialService(db)
+	secondFactorSvc := service.NewDefaultSecondFactorService(db)
+
 	api := api.Api{
-		DB:       db,
-		JWT:      jwtService,
-		WebAuthn: webAuthnSvc,
+		DB:              db,
+		JWT:             jwtService,
+		WebAuthn:        webAuthnSvc,
+		Users:           userSvc,
+		Opaque:          opaqueSvc,
+		Credentials:     credentialSvc,
+		SecondFactorSvc: secondFactorSvc,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {

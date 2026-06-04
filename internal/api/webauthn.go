@@ -1,16 +1,15 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
 	"io"
-	"strings"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog/log"
@@ -19,10 +18,11 @@ import (
 const maxDisplayNameLen = 256
 
 type webauthnApi struct {
-	db         *sql.DB
-	cache      *ristretto.Cache[string, *webauthnSession]
-	webAuthn   *auth.WebAuthnService
-	jwtService *auth.JWTService
+	userService       *service.UserService
+	credentialService *service.CredentialService
+	cache             *ristretto.Cache[string, *webauthnSession]
+	webAuthn          *auth.WebAuthnService
+	jwtService        *auth.JWTService
 }
 
 type webauthnSession struct {
@@ -30,26 +30,23 @@ type webauthnSession struct {
 	userID  int64
 }
 
-func (a *Api) setupWebAuthn(db *sql.DB, e *echo.Group) error {
+func (a *Api) setupWebAuthn(e *echo.Group) error {
 	webAuthn, err := auth.NewWebAuthnService()
 	if err != nil {
 		return fmt.Errorf("failed to create webauthn service: %w", err)
 	}
 
-	cache, err := ristretto.NewCache(&ristretto.Config[string, *webauthnSession]{
-		NumCounters: 1e6,
-		MaxCost:     1e4,
-		BufferItems: 64,
-	})
+	cache, err := newDefaultCache[*webauthnSession]()
 	if err != nil {
 		return fmt.Errorf("failed to create webauthn cache: %w", err)
 	}
 
 	wa := webauthnApi{
-		db:         db,
-		cache:      cache,
-		webAuthn:   webAuthn,
-		jwtService: a.JWT,
+		userService:       a.Users,
+		credentialService: a.Credentials,
+		cache:             cache,
+		webAuthn:          webAuthn,
+		jwtService:        a.JWT,
 	}
 
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
@@ -94,17 +91,9 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	result, err := api.db.ExecContext(c.Request().Context(),
-		"INSERT INTO users (auth_method, display_name) VALUES (?, ?)",
-		"webauthn", request.DisplayName)
+	userID, err := api.userService.Create(c.Request().Context(), "webauthn", request.DisplayName)
 	if err != nil {
 		log.Err(err).Msg("failed to insert user")
-		return c.String(500, "server error")
-	}
-
-	userID, err := result.LastInsertId()
-	if err != nil {
-		log.Err(err).Msg("failed to get last insert id")
 		return c.String(500, "server error")
 	}
 
@@ -120,7 +109,7 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 	if err != nil {
 		log.Err(err).Msg("failed to begin webauthn registration")
 
-		if _, delErr := api.db.ExecContext(c.Request().Context(), "DELETE FROM users WHERE id = ?", userID); delErr != nil {
+		if delErr := api.userService.Delete(c.Request().Context(), userID); delErr != nil {
 			log.Err(delErr).Int64("userID", userID).Msg("failed to delete user after BeginRegistration failure")
 		}
 
@@ -155,7 +144,7 @@ func (api *webauthnApi) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := api.loadWebAuthnUser(ws.userID)
+	user, err := api.userService.LoadWebAuthnUser(c.Request().Context(), ws.userID)
 	if err != nil {
 		log.Err(err).Int64("userID", ws.userID).Msg("failed to load user")
 		api.cache.Del(challenge)
@@ -167,20 +156,18 @@ func (api *webauthnApi) registerFinish(c *echo.Context) error {
 		log.Err(err).Msg("failed to create credential")
 		api.cache.Del(challenge)
 
-		_, delErr := api.db.ExecContext(c.Request().Context(), "DELETE FROM users WHERE id = ?", ws.userID)
-		if delErr != nil {
+		if delErr := api.userService.Delete(c.Request().Context(), ws.userID); delErr != nil {
 			log.Err(delErr).Int64("userID", ws.userID).Msg("failed to delete user after failed registration")
 		}
 
 		return c.String(400, "invalid request")
 	}
 
-	if err := api.persistCredential(ws.userID, credential); err != nil {
+	if err := api.credentialService.Persist(c.Request().Context(), ws.userID, credential); err != nil {
 		log.Err(err).Msg("failed to persist credential")
 		api.cache.Del(challenge)
 
-		_, delErr := api.db.ExecContext(c.Request().Context(), "DELETE FROM users WHERE id = ?", ws.userID)
-		if delErr != nil {
+		if delErr := api.userService.Delete(c.Request().Context(), ws.userID); delErr != nil {
 			log.Err(delErr).Int64("userID", ws.userID).Msg("failed to delete user after persist credential failure")
 		}
 
@@ -239,7 +226,7 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 			return nil, fmt.Errorf("failed to decode user handle: %w", err)
 		}
 
-		user, err := api.loadWebAuthnUser(userID)
+		user, err := api.userService.LoadWebAuthnUser(c.Request().Context(), userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load user: %w", err)
 		}
@@ -254,7 +241,7 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 		return c.String(401, "invalid credentials")
 	}
 
-	if err := api.updateCredential(validatedCredential); err != nil {
+	if err := api.credentialService.Update(c.Request().Context(), validatedCredential); err != nil {
 		log.Err(err).Msg("failed to update credential")
 		api.cache.Del(challenge)
 		return c.String(500, "server error")
@@ -273,112 +260,6 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"token": token})
 }
 
-func (api *webauthnApi) loadWebAuthnUser(userID int64) (*auth.WebAuthnUser, error) {
-	return loadWebAuthnUser(api.db, userID)
-}
 
-func loadWebAuthnUser(db *sql.DB, userID int64) (*auth.WebAuthnUser, error) {
-	var displayName string
-	err := db.QueryRow("SELECT display_name FROM users WHERE id = ?", userID).Scan(&displayName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query user: %w", err)
-	}
-
-	user := &auth.WebAuthnUser{
-		ID:          userID,
-		DisplayName: displayName,
-	}
-
-	rows, err := db.Query(
-		`SELECT credential_id, public_key, attestation_type, transport, aaguid,
-		        sign_count, clone_warning, backup_eligible, backup_state
-		 FROM webauthn_credentials WHERE user_id = ?`, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query credentials: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var c webauthn.Credential
-		var transportStr string
-		var aaguid []byte
-		var signCount int64
-		var cloneWarning, backupEligible, backupState bool
-
-		err := rows.Scan(
-			&c.ID, &c.PublicKey, &c.AttestationType, &transportStr, &aaguid,
-			&signCount, &cloneWarning, &backupEligible, &backupState)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan credential: %w", err)
-		}
-
-		c.Authenticator.AAGUID = aaguid
-		c.Authenticator.SignCount = uint32(signCount)
-		c.Authenticator.CloneWarning = cloneWarning
-		c.Flags = webauthn.CredentialFlags{
-			UserPresent:    true,
-			BackupEligible: backupEligible,
-			BackupState:    backupState,
-		}
-
-		if transportStr != "" {
-			for s := range strings.SplitSeq(transportStr, ",") {
-				c.Transport = append(c.Transport, protocol.AuthenticatorTransport(s))
-			}
-		}
-
-		user.Credentials = append(user.Credentials, c)
-	}
-
-	return user, rows.Err()
-}
-
-func (api *webauthnApi) persistCredential(userID int64, credential *webauthn.Credential) error {
-	return persistCredential(api.db, userID, credential)
-}
-
-func (api *webauthnApi) updateCredential(credential *webauthn.Credential) error {
-	return updateCredential(api.db, credential)
-}
-
-func persistCredential(db *sql.DB, userID int64, credential *webauthn.Credential) error {
-	transportStrs := make([]string, len(credential.Transport))
-	for i, t := range credential.Transport {
-		transportStrs[i] = string(t)
-	}
-	transportStr := strings.Join(transportStrs, ",")
-
-	_, err := db.Exec(
-		`INSERT INTO webauthn_credentials
-		 (user_id, credential_id, public_key, attestation_type, transport, aaguid,
-		  sign_count, clone_warning, backup_eligible, backup_state)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		userID,
-		credential.ID,
-		credential.PublicKey,
-		credential.AttestationType,
-		transportStr,
-		credential.Authenticator.AAGUID,
-		int64(credential.Authenticator.SignCount),
-		credential.Authenticator.CloneWarning,
-		credential.Flags.BackupEligible,
-		credential.Flags.BackupState,
-	)
-	return err
-}
-
-func updateCredential(db *sql.DB, credential *webauthn.Credential) error {
-	_, err := db.Exec(
-		`UPDATE webauthn_credentials
-		 SET sign_count = ?, clone_warning = ?, backup_state = ?, last_used_at = CURRENT_TIMESTAMP
-		 WHERE credential_id = ? AND sign_count < ?`,
-		int64(credential.Authenticator.SignCount),
-		credential.Authenticator.CloneWarning,
-		credential.Flags.BackupState,
-		credential.ID,
-		int64(credential.Authenticator.SignCount),
-	)
-	return err
-}
 
 

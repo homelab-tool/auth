@@ -67,6 +67,6 @@ func loadKeyMaterial(db *sql.DB, conf *opaque.Configuration) (*opaque.ServerKeyM
 	}
 
 	bytes = skm.Encode()
-	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES ($1, $2)", name_key_material, bytes)
+	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", name_key_material, bytes)
 	return skm, err
 }

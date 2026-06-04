@@ -4,6 +4,7 @@ import (
 	"database/sql"
 
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 )
 
@@ -11,15 +12,18 @@ type Api struct {
 	DB              *sql.DB
 	JWT             *auth.JWTService
 	WebAuthn        *auth.WebAuthnService
-	SecondFactorSvc SecondFactorService
+	Users           *service.UserService
+	Opaque          *service.OpaqueService
+	Credentials     *service.CredentialService
+	SecondFactorSvc service.SecondFactorService
 }
 
 func (api *Api) SetupRoutes(e *echo.Group) error {
-	if err := api.setupOpaque(api.DB, e.Group("/opaque"), api.WebAuthn, api.SecondFactorSvc); err != nil {
+	if err := api.setupOpaque(e.Group("/opaque")); err != nil {
 		return err
 	}
 
-	if err := api.setupWebAuthn(api.DB, e.Group("/webauthn")); err != nil {
+	if err := api.setupWebAuthn(e.Group("/webauthn")); err != nil {
 		return err
 	}
 
