@@ -47,6 +47,10 @@ func CreateApp() (*App, error) {
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
 	}))
 
+	e.GET("/health", func(c *echo.Context) error {
+		return c.String(200, "ok")
+	})
+
 	var db, err = InitializeDb()
 	if err != nil {
 		return nil, err

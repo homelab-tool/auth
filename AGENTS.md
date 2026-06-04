@@ -12,6 +12,7 @@ Go + TypeScript monorepo. Echo v5 HTTP server (SQLite-backed). Vite frontend at 
 | All tests (verbose) | `make test-verbose` |
 | With race detector | `make test-race` |
 | Single pkg | `gotestsum -- ./internal/service/...` |
+| E2E tests (Docker) | `make e2e` (builds image + runs testcontainers-go) |
 | Run server | `go run ./cmd/auth/...` |
 | Frontend dev | `pnpm --filter frontend dev` (via Vite) |
 | Frontend lint | `pnpm --filter frontend oxlint` (correctness errors only) |
