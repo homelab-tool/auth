@@ -45,6 +45,23 @@ func TestCreateOpaqueServerStoresKeyMaterial(t *testing.T) {
 	assert.NotEmpty(t, storedBytes)
 }
 
+func TestCreateOpaqueServerLoadsExistingKeyMaterial(t *testing.T) {
+	db := newTestDB(t)
+
+	srv1, err := auth.CreateOpaqueServer(db)
+	require.NoError(t, err)
+	require.NotNil(t, srv1)
+
+	srv2, err := auth.CreateOpaqueServer(db)
+	require.NoError(t, err)
+	require.NotNil(t, srv2)
+
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM secrets WHERE name = 'opaque_skm'").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count, "should not insert duplicate key material")
+}
+
 func TestServerConfigClient(t *testing.T) {
 	client, err := auth.ServerConfig().Client()
 	require.NoError(t, err)

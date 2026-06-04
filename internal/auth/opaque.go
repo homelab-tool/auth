@@ -60,13 +60,22 @@ func loadKeyMaterial(db *sql.DB, conf *opaque.Configuration) (*opaque.ServerKeyM
 	var privateKey, publicKey = conf.KeyGen()
 
 	var skm = &opaque.ServerKeyMaterial{
-		Identity:       nil,
+		Identity:       publicKey.Encode(),
 		PrivateKey:     privateKey,
 		PublicKeyBytes: publicKey.Encode(),
 		OPRFGlobalSeed: seed,
 	}
 
 	bytes = skm.Encode()
-	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", name_key_material, bytes)
-	return skm, err
+	if _, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", name_key_material, bytes); err != nil {
+		return nil, err
+	}
+
+	// Read back and decode to verify the round-trip works, matching restart behavior.
+	err = db.QueryRow("SELECT value FROM secrets WHERE name = ?", name_key_material).Scan(&bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf.DecodeServerKeyMaterial(bytes)
 }
