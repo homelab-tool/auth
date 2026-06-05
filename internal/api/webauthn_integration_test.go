@@ -43,7 +43,7 @@ func addUserHandle(t *testing.T, assertionResponse string, userID int64) string 
 }
 
 func TestWebAuthnFullFlowEC2(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",
@@ -115,7 +115,7 @@ func TestWebAuthnFullFlowEC2(t *testing.T) {
 }
 
 func TestWebAuthnFullFlowRSA(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",
@@ -173,7 +173,7 @@ func TestWebAuthnFullFlowRSA(t *testing.T) {
 }
 
 func TestWebAuthnLoginFinishInvalidCredential(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",

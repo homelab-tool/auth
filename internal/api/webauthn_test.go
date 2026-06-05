@@ -17,7 +17,7 @@ import (
 )
 
 func TestWebAuthnBadPayloads(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	tests := []struct {
@@ -74,7 +74,7 @@ func TestWebAuthnBadPayloads(t *testing.T) {
 }
 
 func TestWebAuthnRegisterStart(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	body := `{"displayName":"testuser"}`
@@ -97,7 +97,7 @@ func TestWebAuthnRegisterStart(t *testing.T) {
 }
 
 func TestWebAuthnLoginStart(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/login/start", nil)
@@ -114,7 +114,7 @@ func TestWebAuthnLoginStart(t *testing.T) {
 }
 
 func TestWebAuthnRegisterStartDisplayNameTooLong(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	longName := strings.Repeat("a", 300)

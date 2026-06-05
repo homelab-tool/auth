@@ -15,7 +15,7 @@ import (
 )
 
 func TestSecondFactorRegisterFullFlow(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
@@ -30,7 +30,7 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 	authenticator := virtualwebauthn.NewAuthenticator()
 	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
 
-	token := registerAndLogin(t, srv, "2fa-user")
+	token := opaqueRegisterAndLogin(t, srv, "2fa-user", "super-secret-password")
 
 	// Register WebAuthn 2FA start
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
@@ -70,7 +70,7 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 }
 
 func TestSecondFactorLoginFullFlow(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
@@ -86,7 +86,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
 
 	// Register OPAQUE user + login to get JWT
-	token := registerAndLogin(t, srv, "2fa-user2")
+	token := opaqueRegisterAndLogin(t, srv, "2fa-user2", "super-secret-password")
 
 	// Register WebAuthn 2FA
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
@@ -111,32 +111,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	authenticator.AddCredential(cred)
 
 	// Now login with OPAQUE — should trigger 2FA
-	client := newOpaqueClient(t)
-	password := []byte("super-secret-password")
-
-	ke1, err := client.GenerateKE1(password)
-	require.NoError(t, err)
-
-	body := `{"clientId":"2fa-user2","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, err := b64.DecodeString(rec.Body.String())
-	require.NoError(t, err)
-	ke2, err := client.Deserialize.KE2(ke2Bytes)
-	require.NoError(t, err)
-	ke3, _, _, err := client.GenerateKE3(ke2, []byte("2fa-user2"), nil)
-	require.NoError(t, err)
-
-	body = `{"clientId":"2fa-user2","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
+	rec = opaqueLoginRaw(t, srv, "2fa-user2", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -147,7 +122,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	assert.NotEmpty(t, sessionID)
 
 	// Complete 2FA with WebAuthn
-	body = `{"sessionId":"` + sessionID + `"}`
+	body := `{"sessionId":"` + sessionID + `"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -175,7 +150,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 }
 
 func TestSecondFactorRegister2FAFinishErrors(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
@@ -190,7 +165,7 @@ func TestSecondFactorRegister2FAFinishErrors(t *testing.T) {
 	require.Equal(t, 401, rec.Code)
 
 	// With JWT but no active 2FA session should return 400
-	token := registerAndLogin(t, srv, "2fa-error-user")
+	token := opaqueRegisterAndLogin(t, srv, "2fa-error-user", "super-secret-password")
 
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(`{"id":"test"}`))
 	req.Header.Set("Content-Type", "application/json")

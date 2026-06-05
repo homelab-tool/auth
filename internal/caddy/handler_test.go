@@ -5,32 +5,23 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"testing"
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/homelab-tool/auth/internal"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/caddy"
 	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 const testHost = "test.example.com"
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	err := internal.MigrateDB("sqlite3://" + dbPath)
-	require.NoError(t, err)
-	db, err := sql.Open("sqlite3", dbPath+"?cache=shared")
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	_, err = db.Exec("PRAGMA foreign_keys = ON")
-	require.NoError(t, err)
-	return db
+	return testhelpers.NewTestDB(t)
 }
 
 func setupTest(t *testing.T) (*echo.Echo, *auth.JWTService) {

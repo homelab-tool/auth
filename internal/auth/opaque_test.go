@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func TestServerConfig(t *testing.T) {
@@ -20,7 +21,7 @@ func TestServerConfig(t *testing.T) {
 }
 
 func TestCreateOpaqueServerGeneratesKeyMaterial(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 
 	srv, err := auth.CreateOpaqueServer(db)
 	require.NoError(t, err)
@@ -33,7 +34,7 @@ func TestCreateOpaqueServerGeneratesKeyMaterial(t *testing.T) {
 }
 
 func TestCreateOpaqueServerStoresKeyMaterial(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 
 	srv, err := auth.CreateOpaqueServer(db)
 	require.NoError(t, err)
@@ -46,7 +47,7 @@ func TestCreateOpaqueServerStoresKeyMaterial(t *testing.T) {
 }
 
 func TestCreateOpaqueServerLoadsExistingKeyMaterial(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 
 	srv1, err := auth.CreateOpaqueServer(db)
 	require.NoError(t, err)

@@ -1,7 +1,6 @@
 package api_test
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,14 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
-var b64 = base64.RawURLEncoding
-
 func TestOpaqueFullFlow(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
-	client := newOpaqueClient(t)
+	client := testhelpers.NewOpaqueClient(t)
 	clientId := "testuser"
 	password := []byte("super-secret-password")
 
@@ -26,14 +25,14 @@ func TestOpaqueFullFlow(t *testing.T) {
 	regInit, err := client.RegistrationInit(password)
 	require.NoError(t, err)
 
-	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
+	body := `{"clientId":"` + clientId + `","payload":"` + testhelpers.B64.EncodeToString(regInit.Serialize()) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	regRespBytes, err := b64.DecodeString(rec.Body.String())
+	regRespBytes, err := testhelpers.B64.DecodeString(rec.Body.String())
 	require.NoError(t, err)
 	regResp, err := client.Deserialize.RegistrationResponse(regRespBytes)
 	require.NoError(t, err)
@@ -44,7 +43,7 @@ func TestOpaqueFullFlow(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, exportKey)
 
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
+	body = `{"clientId":"` + clientId + `","payload":"` + testhelpers.B64.EncodeToString(record.Serialize()) + `"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -54,11 +53,11 @@ func TestOpaqueFullFlow(t *testing.T) {
 
 	// === DUPLICATE REGISTRATION ===
 
-	dupClient := newOpaqueClient(t)
+	dupClient := testhelpers.NewOpaqueClient(t)
 	regInit2, err := dupClient.RegistrationInit(password)
 	require.NoError(t, err)
 
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit2.Serialize()) + `"}`
+	body = `{"clientId":"` + clientId + `","payload":"` + testhelpers.B64.EncodeToString(regInit2.Serialize()) + `"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -67,49 +66,20 @@ func TestOpaqueFullFlow(t *testing.T) {
 
 	// === LOGIN ===
 
-	loginClient := newOpaqueClient(t)
-
-	ke1, err := loginClient.GenerateKE1(password)
-	require.NoError(t, err)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, err := b64.DecodeString(rec.Body.String())
-	require.NoError(t, err)
-	ke2, err := loginClient.Deserialize.KE2(ke2Bytes)
-	require.NoError(t, err)
-
-	ke3, sessionKey, _, err := loginClient.GenerateKE3(ke2, clientID, nil)
-	require.NoError(t, err)
-	require.NotNil(t, sessionKey)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-	var resp map[string]string
-	err = json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp["token"])
+	token := opaqueLogin(t, srv, clientId, password)
+	assert.NotEmpty(t, token)
 }
 
 func TestOpaqueLoginUnknownUser(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
-	loginClient := newOpaqueClient(t)
+	loginClient := testhelpers.NewOpaqueClient(t)
 
 	ke1, err := loginClient.GenerateKE1([]byte("password"))
 	require.NoError(t, err)
 
 	// loginStart returns 200 with a fake KE2 to prevent client enumeration
-	body := `{"clientId":"nonexistent","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
+	body := `{"clientId":"nonexistent","payload":"` + testhelpers.B64.EncodeToString(ke1.Serialize()) + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
@@ -118,7 +88,7 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 	require.NotEmpty(t, rec.Body.String())
 
 	// loginFinish eventually rejects the fake session with 401
-	ke2Bytes, err := b64.DecodeString(rec.Body.String())
+	ke2Bytes, err := testhelpers.B64.DecodeString(rec.Body.String())
 	require.NoError(t, err)
 	ke2, err := loginClient.Deserialize.KE2(ke2Bytes)
 	require.NoError(t, err)
@@ -133,7 +103,7 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 	for i := range fakeKE3 {
 		fakeKE3[i] = byte(i)
 	}
-	body = `{"clientId":"nonexistent","payload":"` + b64.EncodeToString(fakeKE3) + `"}`
+	body = `{"clientId":"nonexistent","payload":"` + testhelpers.B64.EncodeToString(fakeKE3) + `"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -142,47 +112,27 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 }
 
 func TestOpaqueLoginWrongPassword(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
-
-	regClient := newOpaqueClient(t)
 	clientId := "testuser"
 
 	// Register with correct password
-	regInit, err := regClient.RegistrationInit([]byte("correct-password"))
+	token := opaqueRegisterAndLogin(t, srv, clientId, "correct-password")
+	require.NotEmpty(t, token)
+
+	// Login with wrong password
+	wrongClient := testhelpers.NewOpaqueClient(t)
+	ke1Wrong, err := wrongClient.GenerateKE1([]byte("wrong-password"))
 	require.NoError(t, err)
 
-	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
+	body := `{"clientId":"` + clientId + `","payload":"` + testhelpers.B64.EncodeToString(ke1Wrong.Serialize()) + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	regRespBytes, _ := b64.DecodeString(rec.Body.String())
-	regResp, _ := regClient.Deserialize.RegistrationResponse(regRespBytes)
-	record, _, _ := regClient.RegistrationFinalize(regResp, nil, nil)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	// Login with wrong password
-	wrongClient := newOpaqueClient(t)
-	ke1Wrong, err := wrongClient.GenerateKE1([]byte("wrong-password"))
-	require.NoError(t, err)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1Wrong.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, _ := b64.DecodeString(rec.Body.String())
+	ke2Bytes, _ := testhelpers.B64.DecodeString(rec.Body.String())
 	ke2, err := wrongClient.Deserialize.KE2(ke2Bytes)
 	require.NoError(t, err)
 
@@ -195,7 +145,7 @@ func TestOpaqueLoginWrongPassword(t *testing.T) {
 	for i := range fakeKE3 {
 		fakeKE3[i] = byte(i)
 	}
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(fakeKE3) + `"}`
+	body = `{"clientId":"` + clientId + `","payload":"` + testhelpers.B64.EncodeToString(fakeKE3) + `"}`
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
@@ -204,7 +154,7 @@ func TestOpaqueLoginWrongPassword(t *testing.T) {
 }
 
 func TestOpaqueBadPayloads(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
 
 	tests := []struct {
@@ -222,7 +172,7 @@ func TestOpaqueBadPayloads(t *testing.T) {
 		{
 			name:   "register start short payload",
 			path:   "/api/opaque/register/start",
-			body:   `{"clientId":"test","payload":"` + b64.EncodeToString([]byte{1, 2, 3}) + `"}`,
+			body:   `{"clientId":"test","payload":"` + testhelpers.B64.EncodeToString([]byte{1, 2, 3}) + `"}`,
 			status: 400,
 		},
 		{
@@ -269,7 +219,7 @@ func TestOpaqueBadPayloads(t *testing.T) {
 }
 
 func TestOpaqueClientIdTooLong(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
 
 	longId := strings.Repeat("a", 300)
@@ -305,59 +255,17 @@ func (m *mockSecondFactor) Methods(_ int64) ([]string, error) {
 }
 
 func TestOpaqueLogin2FARequired(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
 	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
-	client := newOpaqueClient(t)
 	clientId := "testuser"
-	password := []byte("super-secret-password")
 
-	// Register
-	regInit, err := client.RegistrationInit(password)
-	require.NoError(t, err)
-	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
+	opaqueRegister(t, srv, clientId, "super-secret-password")
 
-	regRespBytes, _ := b64.DecodeString(rec.Body.String())
-	regResp, _ := client.Deserialize.RegistrationResponse(regRespBytes)
-	record, _, _ := client.RegistrationFinalize(regResp, []byte(clientId), nil)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	// Login
-	loginClient := newOpaqueClient(t)
-	ke1, err := loginClient.GenerateKE1(password)
-	require.NoError(t, err)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, _ := b64.DecodeString(rec.Body.String())
-	ke2, _ := loginClient.Deserialize.KE2(ke2Bytes)
-	ke3, _, _, _ := loginClient.GenerateKE3(ke2, []byte(clientId), nil)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
+	rec := opaqueLoginRaw(t, srv, clientId, []byte("super-secret-password"))
 
 	var resp map[string]any
-	err = json.Unmarshal(rec.Body.Bytes(), &resp)
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
 	assert.Equal(t, "2fa_required", resp["status"])
 	assert.NotEmpty(t, resp["session_id"])
@@ -365,62 +273,18 @@ func TestOpaqueLogin2FARequired(t *testing.T) {
 }
 
 func TestOpaqueLogin2FANotRequired(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	svc := &mockSecondFactor{required: false}
 	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
-	client := newOpaqueClient(t)
 	clientId := "testuser"
-	password := []byte("super-secret-password")
 
-	// Register
-	regInit, _ := client.RegistrationInit(password)
-	body := `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(regInit.Serialize()) + `"}`
-	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	regRespBytes, _ := b64.DecodeString(rec.Body.String())
-	regResp, _ := client.Deserialize.RegistrationResponse(regRespBytes)
-	record, _, _ := client.RegistrationFinalize(regResp, []byte(clientId), nil)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(record.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	// Login (should get JWT directly since 2FA not required)
-	loginClient := newOpaqueClient(t)
-	ke1, _ := loginClient.GenerateKE1(password)
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, _ := b64.DecodeString(rec.Body.String())
-	ke2, _ := loginClient.Deserialize.KE2(ke2Bytes)
-	ke3, _, _, _ := loginClient.GenerateKE3(ke2, []byte(clientId), nil)
-
-	body = `{"clientId":"` + clientId + `","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	var resp map[string]string
-	err := json.Unmarshal(rec.Body.Bytes(), &resp)
-	require.NoError(t, err)
-	assert.NotEmpty(t, resp["token"])
+	opaqueRegister(t, srv, clientId, "super-secret-password")
+	token := opaqueLogin(t, srv, clientId, []byte("super-secret-password"))
+	assert.NotEmpty(t, token)
 }
 
 func TestOpaqueLogin2FABadSession(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
 	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
 
@@ -442,7 +306,7 @@ func TestOpaqueLogin2FABadSession(t *testing.T) {
 }
 
 func TestOpaqueRegister2FARequiresAuth(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
 
 	body := `{"displayName":"test"}`
@@ -454,7 +318,7 @@ func TestOpaqueRegister2FARequiresAuth(t *testing.T) {
 }
 
 func TestOpaquePayloadTooLarge(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, nil)
 
 	largePayload := strings.Repeat("a", 70000)

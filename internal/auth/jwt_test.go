@@ -1,8 +1,6 @@
 package auth_test
 
 import (
-	"database/sql"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -10,25 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/homelab-tool/auth/internal"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
-func newTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	dbPath := filepath.Join(t.TempDir(), "test.db")
-	err := internal.MigrateDB("sqlite3://" + dbPath)
-	require.NoError(t, err)
-	db, err := sql.Open("sqlite3", dbPath+"?cache=shared")
-	require.NoError(t, err)
-	t.Cleanup(func() { db.Close() })
-	_, err = db.Exec("PRAGMA foreign_keys = ON")
-	require.NoError(t, err)
-	return db
-}
-
 func TestJWTServiceGenerateAndValidate(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -44,7 +29,7 @@ func TestJWTServiceGenerateAndValidate(t *testing.T) {
 }
 
 func TestJWTServiceValidateExpiredToken(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -71,7 +56,7 @@ func TestJWTServiceValidateExpiredToken(t *testing.T) {
 }
 
 func TestJWTServiceValidateWrongSigningMethod(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -94,7 +79,7 @@ func TestJWTServiceValidateWrongSigningMethod(t *testing.T) {
 }
 
 func TestJWTServiceValidateMalformedToken(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -103,7 +88,7 @@ func TestJWTServiceValidateMalformedToken(t *testing.T) {
 }
 
 func TestJWTServiceValidateEmptyToken(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -112,7 +97,7 @@ func TestJWTServiceValidateEmptyToken(t *testing.T) {
 }
 
 func TestJWTServiceGenerateMultipleTokens(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
@@ -134,11 +119,11 @@ func TestJWTServiceGenerateMultipleTokens(t *testing.T) {
 }
 
 func TestJWTServiceCrossDBValidation(t *testing.T) {
-	db1 := newTestDB(t)
+	db1 := testhelpers.NewTestDB(t)
 	svc1, err := auth.NewJWTService(db1)
 	require.NoError(t, err)
 
-	db2 := newTestDB(t)
+	db2 := testhelpers.NewTestDB(t)
 	svc2, err := auth.NewJWTService(db2)
 	require.NoError(t, err)
 
@@ -151,7 +136,7 @@ func TestJWTServiceCrossDBValidation(t *testing.T) {
 }
 
 func TestJWTServiceSecretPersistence(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 
 	svc1, err := auth.NewJWTService(db)
 	require.NoError(t, err)

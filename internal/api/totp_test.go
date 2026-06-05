@@ -16,14 +16,14 @@ import (
 )
 
 func TestTOTPRegisterFlow(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := registerAndLogin(t, srv, "totp-user")
+	token := opaqueRegisterAndLogin(t, srv, "totp-user", "super-secret-password")
 
 	// Generate TOTP secret
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -67,14 +67,14 @@ func TestTOTPRegisterFlow(t *testing.T) {
 }
 
 func TestTOTPLoginFlow(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := registerAndLogin(t, srv, "totp-user2")
+	token := opaqueRegisterAndLogin(t, srv, "totp-user2", "super-secret-password")
 
 	// Enable TOTP 2FA
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -103,32 +103,7 @@ func TestTOTPLoginFlow(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 
 	// Login with OPAQUE — should trigger 2FA
-	client := newOpaqueClient(t)
-	password := []byte("super-secret-password")
-
-	ke1, err := client.GenerateKE1(password)
-	require.NoError(t, err)
-
-	body = `{"clientId":"totp-user2","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, err := b64.DecodeString(rec.Body.String())
-	require.NoError(t, err)
-	ke2, err := client.Deserialize.KE2(ke2Bytes)
-	require.NoError(t, err)
-	ke3, _, _, err := client.GenerateKE3(ke2, []byte("totp-user2"), nil)
-	require.NoError(t, err)
-
-	body = `{"clientId":"totp-user2","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
+	rec = opaqueLoginRaw(t, srv, "totp-user2", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -160,14 +135,14 @@ func TestTOTPLoginFlow(t *testing.T) {
 }
 
 func TestTOTPLoginInvalidCode(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := registerAndLogin(t, srv, "totp-user3")
+	token := opaqueRegisterAndLogin(t, srv, "totp-user3", "super-secret-password")
 
 	// Enable TOTP
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -195,32 +170,7 @@ func TestTOTPLoginInvalidCode(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 
 	// Login to get 2FA session
-	client := newOpaqueClient(t)
-	password := []byte("super-secret-password")
-
-	ke1, err := client.GenerateKE1(password)
-	require.NoError(t, err)
-
-	body = `{"clientId":"totp-user3","payload":"` + b64.EncodeToString(ke1.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/start", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
-
-	ke2Bytes, err := b64.DecodeString(rec.Body.String())
-	require.NoError(t, err)
-	ke2, err := client.Deserialize.KE2(ke2Bytes)
-	require.NoError(t, err)
-	ke3, _, _, err := client.GenerateKE3(ke2, []byte("totp-user3"), nil)
-	require.NoError(t, err)
-
-	body = `{"clientId":"totp-user3","payload":"` + b64.EncodeToString(ke3.Serialize()) + `"}`
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/finish", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec = httptest.NewRecorder()
-	srv.ServeHTTP(rec, req)
-	require.Equal(t, 200, rec.Code)
+	rec = opaqueLoginRaw(t, srv, "totp-user3", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -238,7 +188,7 @@ func TestTOTPLoginInvalidCode(t *testing.T) {
 }
 
 func TestTOTPRegisterErrors(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
@@ -260,7 +210,7 @@ func TestTOTPRegisterErrors(t *testing.T) {
 	assert.Equal(t, 401, rec.Code)
 
 	// Verify with JWT but no active secret
-	token := registerAndLogin(t, srv, "totp-error-user")
+	token := opaqueRegisterAndLogin(t, srv, "totp-error-user", "super-secret-password")
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/verify", strings.NewReader(`{"code":"123456"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -278,7 +228,7 @@ func TestTOTPRegisterErrors(t *testing.T) {
 }
 
 func TestTOTPLoginInvalidSession(t *testing.T) {
-	db, _ := newTestDB(t)
+	db := newTestDB(t)
 	srv := newTestServer(t, db, &testServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
