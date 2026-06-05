@@ -17,6 +17,7 @@ type Api struct {
 	Credentials     *service.CredentialService
 	SecondFactorSvc service.SecondFactorService
 	TOTP            *service.TOTPService
+	SiteConfigs     *service.SiteConfigService
 }
 
 func (api *Api) SetupRoutes(e *echo.Group) error {
@@ -29,6 +30,8 @@ func (api *Api) SetupRoutes(e *echo.Group) error {
 	}
 
 	e.GET("/whoami", api.whoami, jwtMiddleware(api.JWT))
+
+	api.setupSiteConfigs(e.Group("/site-configs"), jwtMiddleware(api.JWT))
 
 	return nil
 }

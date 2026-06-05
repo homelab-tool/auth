@@ -71,6 +71,7 @@ func CreateApp() (*App, error) {
 	credentialSvc := service.NewCredentialService(db)
 	secondFactorSvc := service.NewDefaultSecondFactorService(db)
 	totpSvc := service.NewTOTPService(db)
+	siteConfigSvc := service.NewSiteConfigService(db)
 
 	api := api.Api{
 		DB:              db,
@@ -81,13 +82,14 @@ func CreateApp() (*App, error) {
 		Credentials:     credentialSvc,
 		SecondFactorSvc: secondFactorSvc,
 		TOTP:            totpSvc,
+		SiteConfigs:     siteConfigSvc,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api")); err != nil {
 		return nil, err
 	}
 
-	caddyHandler := caddy.NewHandler(jwtService)
+	caddyHandler := caddy.NewHandler(jwtService, siteConfigSvc)
 	caddyHandler.SetupRoutes(e.Group("/caddy"))
 
 	app := &App{

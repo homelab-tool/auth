@@ -1,6 +1,7 @@
 package caddy_test
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,10 @@ import (
 	"github.com/homelab-tool/auth/internal"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/caddy"
+	"github.com/homelab-tool/auth/internal/service"
 )
+
+const testHost = "test.example.com"
 
 func newTestDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -34,8 +38,13 @@ func setupTest(t *testing.T) (*echo.Echo, *auth.JWTService) {
 	db := newTestDB(t)
 	jwtSvc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
+
+	siteConfigSvc := service.NewSiteConfigService(db)
+	_, err = siteConfigSvc.Create(context.Background(), testHost)
+	require.NoError(t, err)
+
 	e := echo.New()
-	h := caddy.NewHandler(jwtSvc)
+	h := caddy.NewHandler(jwtSvc, siteConfigSvc)
 	h.SetupRoutes(e.Group("/caddy"))
 	return e, jwtSvc
 }
@@ -47,6 +56,7 @@ func TestForwardAuthValidToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Forwarded-Host", testHost)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -60,6 +70,7 @@ func TestForwardAuthValidTokenCookie(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
 	req.AddCookie(&http.Cookie{Name: "token", Value: token})
+	req.Header.Set("X-Forwarded-Host", testHost)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -70,6 +81,7 @@ func TestForwardAuthNoAuth(t *testing.T) {
 	srv, _ := setupTest(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
+	req.Header.Set("X-Forwarded-Host", testHost)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -81,6 +93,7 @@ func TestForwardAuthInvalidToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
 	req.Header.Set("Authorization", "Bearer this-is-not-a-valid-jwt")
+	req.Header.Set("X-Forwarded-Host", testHost)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
@@ -95,8 +108,36 @@ func TestForwardAuthBearerTakesPriority(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
 	req.Header.Set("Authorization", "Bearer "+validToken)
 	req.AddCookie(&http.Cookie{Name: "token", Value: "some-invalid-cookie-jwt"})
+	req.Header.Set("X-Forwarded-Host", testHost)
 	rec := httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 
 	require.Equal(t, 200, rec.Code)
+}
+
+func TestForwardAuthHostNotConfigured(t *testing.T) {
+	srv, jwtSvc := setupTest(t)
+	token, err := jwtSvc.GenerateToken(4, "test-user")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Forwarded-Host", "unknown.example.com")
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, 401, rec.Code)
+}
+
+func TestForwardAuthMissingHost(t *testing.T) {
+	srv, jwtSvc := setupTest(t)
+	token, err := jwtSvc.GenerateToken(5, "test-user")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+	srv.ServeHTTP(rec, req)
+
+	assert.Equal(t, 401, rec.Code)
 }

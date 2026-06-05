@@ -40,6 +40,14 @@ app1.mydomain.test {
         uri /caddy/forward_auth
     }
     respond "Hello World from caddy!"
+}
+
+app2.mydomain.test {
+    tls internal
+    forward_auth auth:1337 {
+        uri /caddy/forward_auth
+    }
+    respond "App 2"
 }`
 
 type e2eEnv struct {
@@ -158,6 +166,17 @@ func (env *e2eEnv) authAPI(t *testing.T, method, path string, headers map[string
 	return resp
 }
 
+func (env *e2eEnv) configureSite(t *testing.T, token, hostname string) {
+	t.Helper()
+	body := `{"hostname":"` + hostname + `"}`
+	resp := env.authAPI(t, "POST", "/api/site-configs",
+		map[string]string{
+			"Content-Type":  "application/json",
+			"Authorization": "Bearer " + token,
+		}, body)
+	require.Equal(t, 201, resp.StatusCode)
+}
+
 func (env *e2eEnv) opaqueRegister(t *testing.T, clientID, password string) {
 	t.Helper()
 
@@ -240,6 +259,7 @@ func TestE2EForwardAuth(t *testing.T) {
 
 	env.opaqueRegister(t, clientID, password)
 	token := env.opaqueLogin(t, clientID, password)
+	env.configureSite(t, token, "app1.mydomain.test")
 
 	t.Run("authorized request returns 200", func(t *testing.T) {
 		resp := env.caddyRequest(t, "GET", "/", "app1.mydomain.test",
@@ -256,6 +276,12 @@ func TestE2EForwardAuth(t *testing.T) {
 		resp := env.caddyRequest(t, "GET", "/", "app1.mydomain.test", nil, "")
 		assert.Equal(t, 401, resp.StatusCode)
 	})
+
+	t.Run("unconfigured site returns 401 even with valid token", func(t *testing.T) {
+		resp := env.caddyRequest(t, "GET", "/", "app2.mydomain.test",
+			map[string]string{"Authorization": "Bearer " + token}, "")
+		assert.Equal(t, 401, resp.StatusCode)
+	})
 }
 
 func TestE2EForwardAuthConcurrent(t *testing.T) {
@@ -267,6 +293,7 @@ func TestE2EForwardAuthConcurrent(t *testing.T) {
 
 		env.opaqueRegister(t, "user1", "pass1")
 		token := env.opaqueLogin(t, "user1", "pass1")
+		env.configureSite(t, token, "app1.mydomain.test")
 
 		resp := env.caddyRequest(t, "GET", "/", "app1.mydomain.test",
 			map[string]string{"Authorization": "Bearer " + token}, "")
@@ -279,6 +306,7 @@ func TestE2EForwardAuthConcurrent(t *testing.T) {
 
 		env.opaqueRegister(t, "user2", "pass2")
 		token := env.opaqueLogin(t, "user2", "pass2")
+		env.configureSite(t, token, "app1.mydomain.test")
 
 		resp := env.caddyRequest(t, "GET", "/", "app1.mydomain.test",
 			map[string]string{"Authorization": "Bearer " + token}, "")
