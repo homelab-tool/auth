@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
@@ -136,7 +137,7 @@ func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
 }
 
 func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
-	body, err := io.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
 		return c.String(400, "invalid request")
@@ -255,7 +256,7 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	body, err := io.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
 		return c.String(400, "invalid request")

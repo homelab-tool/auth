@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"time"
 
 	"github.com/dgraph-io/ristretto/v2"
@@ -15,7 +16,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const maxDisplayNameLen = 256
+const (
+	maxDisplayNameLen = 256
+	maxBodySize       = 1 << 20
+)
 
 type webauthnApi struct {
 	userService       *service.UserService
@@ -123,7 +127,7 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 }
 
 func (api *webauthnApi) registerFinish(c *echo.Context) error {
-	body, err := io.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
 		return c.String(400, "invalid request")
@@ -200,7 +204,7 @@ func (api *webauthnApi) loginStart(c *echo.Context) error {
 }
 
 func (api *webauthnApi) loginFinish(c *echo.Context) error {
-	body, err := io.ReadAll(c.Request().Body)
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
 		return c.String(400, "invalid request")
