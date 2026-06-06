@@ -1,9 +1,9 @@
 packages: []
 catalog:
-  '@serenity-kit/opaque': 1.1.0
-  oxfmt: 0.53.0
-  oxlint: 1.68.0
-  rolldown: 1.1.0
+    "@serenity-kit/opaque": 1.1.0
+    oxfmt: 0.53.0
+    oxlint: 1.68.0
+    rolldown: 1.1.0
 catalogMode: strict
 cleanupUnusedCatalogs: true
 dedupePeers: true

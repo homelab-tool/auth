@@ -6,23 +6,23 @@ Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX fron
 
 ## Commands
 
-| What | Command |
-|---|---|
-| All Go tests | `make test` (uses `gotestsum`) |
-| All tests (verbose) | `make test-verbose` |
-| With race detector | `make test-race` |
-| Single pkg | `gotestsum -- ./internal/service/...` |
-| E2E tests (Docker) | `make e2e` (builds image + runs testcontainers-go) |
-| Run server | `make run` (builds templ + frontend first) |
-| Build all | `make build` (builds templ + frontend + Go binary) |
-| Regenerate templates | `make templ-gen` |
-| Build JS bundle | `make js-build` |
-| JS watch | `make js-watch` |
-| Full generate | `make generate` (templ + rolldown) |
-| Dev mode | `make dev` (generate + run server + watch) |
-| Frontend lint | `pnpm oxlint` |
-| Frontend format | `pnpm oxfmt` |
-| Install all deps | `pnpm install` |
+| What                 | Command                                            |
+| -------------------- | -------------------------------------------------- |
+| All Go tests         | `make test` (uses `gotestsum`)                     |
+| All tests (verbose)  | `make test-verbose`                                |
+| With race detector   | `make test-race`                                   |
+| Single pkg           | `gotestsum -- ./internal/service/...`              |
+| E2E tests (Docker)   | `make e2e` (builds image + runs testcontainers-go) |
+| Run server           | `make run` (builds templ + frontend first)         |
+| Build all            | `make build` (builds templ + frontend + Go binary) |
+| Regenerate templates | `make templ-gen`                                   |
+| Build JS bundle      | `make js-build`                                    |
+| JS watch             | `make js-watch`                                    |
+| Full generate        | `make generate` (templ + rolldown)                 |
+| Dev mode             | `make dev` (generate + run server + watch)         |
+| Frontend lint        | `pnpm oxlint`                                      |
+| Frontend format      | `pnpm oxfmt`                                       |
+| Install all deps     | `pnpm install`                                     |
 
 ## Architecture
 
@@ -53,4 +53,3 @@ Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX fron
 - API tests use in-memory Echo (no real HTTP server), tests in `api_test` / `service_test` external packages
 - `WEBAUTHN_*` env vars are set in test helpers with `t.Setenv()`
 - `-count=1` to disable caching
-
