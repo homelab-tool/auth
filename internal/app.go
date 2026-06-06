@@ -2,12 +2,18 @@ package internal
 
 import (
 	"database/sql"
+	"io/fs"
 	"log/slog"
 
 	"github.com/homelab-tool/auth/internal/api"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/caddy"
+	"github.com/homelab-tool/auth/internal/layout"
+	"github.com/homelab-tool/auth/internal/login"
+	"github.com/homelab-tool/auth/internal/register"
 	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/static"
+	"github.com/homelab-tool/auth/internal/success"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
 	"github.com/rs/zerolog"
@@ -91,6 +97,18 @@ func CreateApp() (*App, error) {
 
 	caddyHandler := caddy.NewHandler(jwtService, siteConfigSvc)
 	caddyHandler.SetupRoutes(e.Group("/caddy"))
+
+	subFS, err := fs.Sub(static.Files, "dist")
+	if err != nil {
+		return nil, err
+	}
+	e.StaticFS("/static", subFS)
+
+	e.GET("/login", login.PageHandler)
+	e.GET("/register", register.PageHandler)
+	e.GET("/success", success.PageHandler(jwtService))
+	e.POST("/auth/set-cookie", layout.SetCookieHandler(jwtService))
+	e.POST("/auth/logout", layout.LogoutHandler)
 
 	app := &App{
 		Router: e,

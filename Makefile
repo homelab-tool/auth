@@ -13,9 +13,11 @@ vet:
 	go vet ./...
 
 run:
+	$(MAKE) generate
 	go run ./cmd/auth/...
 
 build:
+	$(MAKE) generate
 	go build -o bin/auth ./cmd/auth/...
 
 e2e-build:
@@ -24,4 +26,21 @@ e2e-build:
 e2e: e2e-build
 	go test -v -count=1 -timeout 10m ./test/e2e/...
 
-.PHONY: test test-race test-verbose vet run build e2e e2e-build
+templ-gen:
+	go tool templ generate
+
+js-build:
+	pnpm build
+
+js-watch:
+	pnpm watch
+
+generate: templ-gen js-build
+
+dev:
+	$(MAKE) generate
+	go run ./cmd/auth/... &
+	pnpm watch &
+	wait
+
+.PHONY: test test-race test-verbose vet run build e2e e2e-build templ-gen js-build js-watch generate dev

@@ -12,7 +12,7 @@ import (
 )
 
 //go:embed migrations/*.sql
-var fs embed.FS
+var migrationFiles embed.FS
 
 func InitializeDb() (*sql.DB, error) {
 	log.Debug().Msg("initializing database")
@@ -56,7 +56,7 @@ func MigrateDB(dbURL string) error {
 	log.Debug().Str("url", dbURL).Msg("running migrations")
 
 	const sourceName = "iofs"
-	sourceDriver, err := iofs.New(fs, "migrations")
+	sourceDriver, err := iofs.New(migrationFiles, "migrations")
 	if err != nil {
 		return err
 	}

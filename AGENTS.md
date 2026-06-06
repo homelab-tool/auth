@@ -2,7 +2,7 @@
 
 ## What this is
 
-Go + TypeScript monorepo. Echo v5 HTTP server (SQLite-backed). Vite frontend at `frontend/`.
+Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX frontend.
 
 ## Commands
 
@@ -13,23 +13,32 @@ Go + TypeScript monorepo. Echo v5 HTTP server (SQLite-backed). Vite frontend at 
 | With race detector | `make test-race` |
 | Single pkg | `gotestsum -- ./internal/service/...` |
 | E2E tests (Docker) | `make e2e` (builds image + runs testcontainers-go) |
-| Run server | `go run ./cmd/auth/...` |
-| Frontend dev | `pnpm --filter frontend dev` (via Vite) |
-| Frontend lint | `pnpm --filter frontend oxlint` (correctness errors only) |
-| Frontend format | `pnpm --filter frontend oxfmt` |
-| Install all deps | `pnpm install` (root) |
+| Run server | `make run` (builds templ + frontend first) |
+| Build all | `make build` (builds templ + frontend + Go binary) |
+| Regenerate templates | `make templ-gen` |
+| Build JS bundle | `make js-build` |
+| JS watch | `make js-watch` |
+| Full generate | `make generate` (templ + rolldown) |
+| Dev mode | `make dev` (generate + run server + watch) |
+| Frontend lint | `pnpm oxlint` |
+| Frontend format | `pnpm oxfmt` |
+| Install all deps | `pnpm install` |
 
 ## Architecture
 
 - **`cmd/auth/main.go`** — entrypoint, listens on `:1337`
-- **`internal/app.go`** — wires Echo, DB, services, routes at `/api`
+- **`internal/app.go`** — wires Echo, DB, services, routes
 - **`internal/database.go`** — SQLite, embedded migrations, WAL journal + foreign keys
 - **`internal/api/`** — HTTP handlers for `/api` routes
 - **`internal/caddy/`** — Caddy `forward_auth` endpoint at `/caddy/forward_auth`
 - **`internal/auth/`** — crypto/low-level (JWT, OPAQUE, WebAuthn)
 - **`internal/service/`** — business logic layer
 - **`internal/migrations/`** — SQLite migrations
-- **`frontend/`** — Vite + TypeScript
+- **`internal/layout/`** — shared page layout (templ) + auth handlers + JS bundle source (OPAQUE client, WebAuthn client, cookie helpers)
+- **`internal/login/`** — login page (templ + Go handler)
+- **`internal/register/`** — register page (templ + Go handler)
+- **`internal/success/`** — post-login landing page (templ + Go handler)
+- **`internal/static/`** — embedded static assets (HTMX, built auth.js)
 
 ## Required env vars (WebAuthn)
 

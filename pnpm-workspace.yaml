@@ -1,16 +1,11 @@
-packages:
-  - ./frontend
+packages: []
 catalog:
-  '@serenity-kit/opaque': ^1.1.0
-  oxfmt: ^0.45.0
-  oxlint: ^1.60.0
-  typescript: ^6.0.3
-  vite: ^8.0.8
-
+  '@serenity-kit/opaque': 1.1.0
+  oxfmt: 0.53.0
+  oxlint: 1.68.0
+  rolldown: 1.1.0
 catalogMode: strict
 cleanupUnusedCatalogs: true
-
 dedupePeers: true
-
 engineStrict: true
 failIfNoMatch: true

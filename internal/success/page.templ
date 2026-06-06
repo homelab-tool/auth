@@ -1,0 +1,12 @@
+package success
+
+import "github.com/homelab-tool/auth/internal/layout"
+
+templ Page() {
+  @layout.Page("Home") {
+    <h1>Logged in successfully!</h1>
+    <form action="/auth/logout" method="post">
+      <button type="submit">Log Out</button>
+    </form>
+  }
+}
