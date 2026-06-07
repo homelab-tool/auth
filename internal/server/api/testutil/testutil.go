@@ -1,4 +1,4 @@
-package api_test
+package testutil
 
 import (
 	"database/sql"
@@ -8,27 +8,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/labstack/echo/v5"
-	"github.com/stretchr/testify/require"
-
-	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/testhelpers"
+	"github.com/labstack/echo/v5"
+	"github.com/stretchr/testify/require"
 )
 
-func newTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	return testhelpers.NewTestDB(t)
-}
-
-type testServerOpts struct {
+type NewTestServerOpts struct {
 	RPID            string
 	RPOrigins       string
 	SecondFactorSvc service.SecondFactorService
 }
 
-func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
+func NewTestServer(t *testing.T, db *sql.DB, opts *NewTestServerOpts) *echo.Echo {
 	t.Helper()
 
 	rpID := "localhost"
@@ -77,8 +71,7 @@ func newTestServer(t *testing.T, db *sql.DB, opts *testServerOpts) *echo.Echo {
 	return e
 }
 
-// opaqueRegister performs the OPAQUE registration flow.
-func opaqueRegister(t *testing.T, srv *echo.Echo, clientID, password string) {
+func OpaqueRegister(t *testing.T, srv *echo.Echo, clientID, password string) {
 	t.Helper()
 	client := testhelpers.NewOpaqueClient(t)
 
@@ -108,16 +101,13 @@ func opaqueRegister(t *testing.T, srv *echo.Echo, clientID, password string) {
 	require.Equal(t, 200, rec.Code)
 }
 
-// opaqueRegisterAndLogin performs the full OPAQUE register + login flow
-// and returns the JWT token from the server.
-func opaqueRegisterAndLogin(t *testing.T, srv *echo.Echo, clientID, password string) string {
+func OpaqueRegisterAndLogin(t *testing.T, srv *echo.Echo, clientID, password string) string {
 	t.Helper()
-	opaqueRegister(t, srv, clientID, password)
-	return opaqueLogin(t, srv, clientID, []byte(password))
+	OpaqueRegister(t, srv, clientID, password)
+	return OpaqueLogin(t, srv, clientID, []byte(password))
 }
 
-// opaqueLoginRaw performs the KE1→KE2→KE3 login handshake and returns the raw response recorder.
-func opaqueLoginRaw(t *testing.T, srv *echo.Echo, clientID string, password []byte) *httptest.ResponseRecorder {
+func OpaqueLoginRaw(t *testing.T, srv *echo.Echo, clientID string, password []byte) *httptest.ResponseRecorder {
 	t.Helper()
 
 	loginClient := testhelpers.NewOpaqueClient(t)
@@ -149,10 +139,9 @@ func opaqueLoginRaw(t *testing.T, srv *echo.Echo, clientID string, password []by
 	return rec
 }
 
-// opaqueLogin performs the OPAQUE login handshake and returns the JWT token.
-func opaqueLogin(t *testing.T, srv *echo.Echo, clientID string, password []byte) string {
+func OpaqueLogin(t *testing.T, srv *echo.Echo, clientID string, password []byte) string {
 	t.Helper()
-	rec := opaqueLoginRaw(t, srv, clientID, password)
+	rec := OpaqueLoginRaw(t, srv, clientID, password)
 
 	var resp map[string]string
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)

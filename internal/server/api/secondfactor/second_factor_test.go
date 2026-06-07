@@ -1,6 +1,8 @@
-package api_test
+package secondfactor_test
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,12 +13,42 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
 	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
+func extractPublicKey(t *testing.T, response string) string {
+	t.Helper()
+	var wrapped map[string]json.RawMessage
+	err := json.Unmarshal([]byte(response), &wrapped)
+	require.NoError(t, err)
+	pk, ok := wrapped["publicKey"]
+	require.True(t, ok, "response should contain publicKey field")
+	return string(pk)
+}
+
+func addUserHandle(t *testing.T, assertionResponse string, userID int64) string {
+	t.Helper()
+	var resp map[string]any
+	err := json.Unmarshal([]byte(assertionResponse), &resp)
+	require.NoError(t, err)
+
+	response, ok := resp["response"].(map[string]any)
+	require.True(t, ok)
+
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], uint64(userID))
+	response["userHandle"] = base64.RawURLEncoding.EncodeToString(buf[:])
+
+	patched, err := json.Marshal(resp)
+	require.NoError(t, err)
+	return string(patched)
+}
+
 func TestSecondFactorRegisterFullFlow(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
@@ -30,7 +62,7 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 	authenticator := virtualwebauthn.NewAuthenticator()
 	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
 
-	token := opaqueRegisterAndLogin(t, srv, "2fa-user", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "2fa-user", "super-secret-password")
 
 	// Register WebAuthn 2FA start
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
@@ -70,8 +102,8 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 }
 
 func TestSecondFactorLoginFullFlow(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
@@ -86,7 +118,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	cred := virtualwebauthn.NewCredential(virtualwebauthn.KeyTypeEC2)
 
 	// Register OPAQUE user + login to get JWT
-	token := opaqueRegisterAndLogin(t, srv, "2fa-user2", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "2fa-user2", "super-secret-password")
 
 	// Register WebAuthn 2FA
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", nil)
@@ -111,7 +143,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	authenticator.AddCredential(cred)
 
 	// Now login with OPAQUE — should trigger 2FA
-	rec = opaqueLoginRaw(t, srv, "2fa-user2", []byte("super-secret-password"))
+	rec = apitest.OpaqueLoginRaw(t, srv, "2fa-user2", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -150,8 +182,8 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 }
 
 func TestSecondFactorRegister2FAFinishErrors(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
@@ -165,7 +197,7 @@ func TestSecondFactorRegister2FAFinishErrors(t *testing.T) {
 	require.Equal(t, 401, rec.Code)
 
 	// With JWT but no active 2FA session should return 400
-	token := opaqueRegisterAndLogin(t, srv, "2fa-error-user", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "2fa-error-user", "super-secret-password")
 
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/finish", strings.NewReader(`{"id":"test"}`))
 	req.Header.Set("Content-Type", "application/json")

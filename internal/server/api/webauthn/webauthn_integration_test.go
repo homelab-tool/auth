@@ -1,4 +1,4 @@
-package api_test
+package webauthn_test
 
 import (
 	"encoding/base64"
@@ -12,6 +12,9 @@ import (
 	"github.com/descope/virtualwebauthn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func extractPublicKey(t *testing.T, response string) string {
@@ -43,8 +46,8 @@ func addUserHandle(t *testing.T, assertionResponse string, userID int64) string 
 }
 
 func TestWebAuthnFullFlowEC2(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",
 	})
@@ -115,8 +118,8 @@ func TestWebAuthnFullFlowEC2(t *testing.T) {
 }
 
 func TestWebAuthnFullFlowRSA(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",
 	})
@@ -173,8 +176,8 @@ func TestWebAuthnFullFlowRSA(t *testing.T) {
 }
 
 func TestWebAuthnLoginFinishInvalidCredential(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:      "localhost",
 		RPOrigins: "http://localhost:1337",
 	})

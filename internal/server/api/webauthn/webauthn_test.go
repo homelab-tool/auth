@@ -1,4 +1,4 @@
-package api_test
+package webauthn_test
 
 import (
 	"encoding/base64"
@@ -14,11 +14,14 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func TestWebAuthnBadPayloads(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	tests := []struct {
 		name   string
@@ -74,8 +77,8 @@ func TestWebAuthnBadPayloads(t *testing.T) {
 }
 
 func TestWebAuthnRegisterStart(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	body := `{"displayName":"testuser"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/register/start", strings.NewReader(body))
@@ -97,8 +100,8 @@ func TestWebAuthnRegisterStart(t *testing.T) {
 }
 
 func TestWebAuthnLoginStart(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/webauthn/login/start", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -114,8 +117,8 @@ func TestWebAuthnLoginStart(t *testing.T) {
 }
 
 func TestWebAuthnRegisterStartDisplayNameTooLong(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{RPID: "example.org", RPOrigins: "https://example.org"})
 
 	longName := strings.Repeat("a", 300)
 	body := `{"displayName":"` + longName + `"}`

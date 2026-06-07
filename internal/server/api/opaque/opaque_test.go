@@ -1,4 +1,4 @@
-package api_test
+package opaque_test
 
 import (
 	"encoding/json"
@@ -10,12 +10,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
 	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func TestOpaqueFullFlow(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 	client := testhelpers.NewOpaqueClient(t)
 	clientId := "testuser"
 	password := []byte("super-secret-password")
@@ -66,13 +67,13 @@ func TestOpaqueFullFlow(t *testing.T) {
 
 	// === LOGIN ===
 
-	token := opaqueLogin(t, srv, clientId, password)
+	token := apitest.OpaqueLogin(t, srv, clientId, password)
 	assert.NotEmpty(t, token)
 }
 
 func TestOpaqueLoginUnknownUser(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 	loginClient := testhelpers.NewOpaqueClient(t)
 
 	ke1, err := loginClient.GenerateKE1([]byte("password"))
@@ -112,12 +113,12 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 }
 
 func TestOpaqueLoginWrongPassword(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 	clientId := "testuser"
 
 	// Register with correct password
-	token := opaqueRegisterAndLogin(t, srv, clientId, "correct-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, clientId, "correct-password")
 	require.NotEmpty(t, token)
 
 	// Login with wrong password
@@ -154,8 +155,8 @@ func TestOpaqueLoginWrongPassword(t *testing.T) {
 }
 
 func TestOpaqueBadPayloads(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 
 	tests := []struct {
 		name   string
@@ -219,8 +220,8 @@ func TestOpaqueBadPayloads(t *testing.T) {
 }
 
 func TestOpaqueClientIdTooLong(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 
 	longId := strings.Repeat("a", 300)
 	body := `{"clientId":"` + longId + `","payload":"dGVzdA=="}`
@@ -255,14 +256,14 @@ func (m *mockSecondFactor) Methods(_ int64) ([]string, error) {
 }
 
 func TestOpaqueLogin2FARequired(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
-	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{SecondFactorSvc: svc})
 	clientId := "testuser"
 
-	opaqueRegister(t, srv, clientId, "super-secret-password")
+	apitest.OpaqueRegister(t, srv, clientId, "super-secret-password")
 
-	rec := opaqueLoginRaw(t, srv, clientId, []byte("super-secret-password"))
+	rec := apitest.OpaqueLoginRaw(t, srv, clientId, []byte("super-secret-password"))
 
 	var resp map[string]any
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
@@ -273,20 +274,20 @@ func TestOpaqueLogin2FARequired(t *testing.T) {
 }
 
 func TestOpaqueLogin2FANotRequired(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc := &mockSecondFactor{required: false}
-	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{SecondFactorSvc: svc})
 	clientId := "testuser"
 
-	opaqueRegister(t, srv, clientId, "super-secret-password")
-	token := opaqueLogin(t, srv, clientId, []byte("super-secret-password"))
+	apitest.OpaqueRegister(t, srv, clientId, "super-secret-password")
+	token := apitest.OpaqueLogin(t, srv, clientId, []byte("super-secret-password"))
 	assert.NotEmpty(t, token)
 }
 
 func TestOpaqueLogin2FABadSession(t *testing.T) {
-	db := newTestDB(t)
+	db := testhelpers.NewTestDB(t)
 	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}
-	srv := newTestServer(t, db, &testServerOpts{SecondFactorSvc: svc})
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{SecondFactorSvc: svc})
 
 	// Missing session ID
 	body := `{}`
@@ -306,8 +307,8 @@ func TestOpaqueLogin2FABadSession(t *testing.T) {
 }
 
 func TestOpaqueRegister2FARequiresAuth(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 
 	body := `{"displayName":"test"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/webauthn/start", strings.NewReader(body))
@@ -318,8 +319,8 @@ func TestOpaqueRegister2FARequiresAuth(t *testing.T) {
 }
 
 func TestOpaquePayloadTooLarge(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 
 	largePayload := strings.Repeat("a", 70000)
 	body := `{"clientId":"test","payload":"` + largePayload + `"}`

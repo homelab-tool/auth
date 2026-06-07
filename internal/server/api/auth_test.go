@@ -6,14 +6,16 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/homelab-tool/auth/internal/server/api/testutil"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestWhoamiSuccess(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
-	token := opaqueRegisterAndLogin(t, srv, "whoami-user", "super-secret-password")
+	db := testhelpers.NewTestDB(t)
+	srv := testutil.NewTestServer(t, db, nil)
+	token := testutil.OpaqueRegisterAndLogin(t, srv, "whoami-user", "super-secret-password")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -28,8 +30,8 @@ func TestWhoamiSuccess(t *testing.T) {
 }
 
 func TestWhoamiNoAuth(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := testutil.NewTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	rec := httptest.NewRecorder()
@@ -38,8 +40,8 @@ func TestWhoamiNoAuth(t *testing.T) {
 }
 
 func TestWhoamiInvalidToken(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := testutil.NewTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	req.Header.Set("Authorization", "Bearer invalidtoken")
@@ -49,8 +51,8 @@ func TestWhoamiInvalidToken(t *testing.T) {
 }
 
 func TestWhoamiWrongScheme(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := testutil.NewTestServer(t, db, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/whoami", nil)
 	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")

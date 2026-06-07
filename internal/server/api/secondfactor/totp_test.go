@@ -1,4 +1,4 @@
-package api_test
+package secondfactor_test
 
 import (
 	"encoding/json"
@@ -12,18 +12,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
 	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func TestTOTPRegisterFlow(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := opaqueRegisterAndLogin(t, srv, "totp-user", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "totp-user", "super-secret-password")
 
 	// Generate TOTP secret
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -67,14 +69,14 @@ func TestTOTPRegisterFlow(t *testing.T) {
 }
 
 func TestTOTPLoginFlow(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := opaqueRegisterAndLogin(t, srv, "totp-user2", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "totp-user2", "super-secret-password")
 
 	// Enable TOTP 2FA
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -103,7 +105,7 @@ func TestTOTPLoginFlow(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 
 	// Login with OPAQUE — should trigger 2FA
-	rec = opaqueLoginRaw(t, srv, "totp-user2", []byte("super-secret-password"))
+	rec = apitest.OpaqueLoginRaw(t, srv, "totp-user2", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -135,14 +137,14 @@ func TestTOTPLoginFlow(t *testing.T) {
 }
 
 func TestTOTPLoginInvalidCode(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
 	})
 
-	token := opaqueRegisterAndLogin(t, srv, "totp-user3", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "totp-user3", "super-secret-password")
 
 	// Enable TOTP
 	req := httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/generate", nil)
@@ -170,7 +172,7 @@ func TestTOTPLoginInvalidCode(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 
 	// Login to get 2FA session
-	rec = opaqueLoginRaw(t, srv, "totp-user3", []byte("super-secret-password"))
+	rec = apitest.OpaqueLoginRaw(t, srv, "totp-user3", []byte("super-secret-password"))
 
 	var loginResp map[string]any
 	err = json.Unmarshal(rec.Body.Bytes(), &loginResp)
@@ -188,8 +190,8 @@ func TestTOTPLoginInvalidCode(t *testing.T) {
 }
 
 func TestTOTPRegisterErrors(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),
@@ -210,7 +212,7 @@ func TestTOTPRegisterErrors(t *testing.T) {
 	assert.Equal(t, 401, rec.Code)
 
 	// Verify with JWT but no active secret
-	token := opaqueRegisterAndLogin(t, srv, "totp-error-user", "super-secret-password")
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "totp-error-user", "super-secret-password")
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/register/2fa/totp/verify", strings.NewReader(`{"code":"123456"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -228,8 +230,8 @@ func TestTOTPRegisterErrors(t *testing.T) {
 }
 
 func TestTOTPLoginInvalidSession(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, &testServerOpts{
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, &apitest.NewTestServerOpts{
 		RPID:            "localhost",
 		RPOrigins:       "http://localhost:1337",
 		SecondFactorSvc: service.NewDefaultSecondFactorService(db),

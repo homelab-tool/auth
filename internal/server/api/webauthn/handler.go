@@ -1,4 +1,4 @@
-package api
+package webauthn
 
 import (
 	"fmt"
@@ -10,6 +10,7 @@ import (
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -21,37 +22,41 @@ const (
 	maxBodySize       = 1 << 20
 )
 
-type webauthnApi struct {
+type Session struct {
+	sessionData *webauthn.SessionData
+	userID      int64
+}
+
+type Handler struct {
 	userService       *service.UserService
 	credentialService *service.CredentialService
-	cache             *ristretto.Cache[string, *webauthnSession]
+	cache             *ristretto.Cache[string, *Session]
 	webAuthn          *auth.WebAuthnService
 	jwtService        *auth.JWTService
 }
 
-type webauthnSession struct {
-	session *webauthn.SessionData
-	userID  int64
+func NewHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService) (*Handler, error) {
+	cache, err := cacheutil.NewCache[*Session]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create webauthn cache: %w", err)
+	}
+
+	return &Handler{
+		userService:       userService,
+		credentialService: credentialService,
+		cache:             cache,
+		webAuthn:          nil,
+		jwtService:        jwtService,
+	}, nil
 }
 
-func (a *Api) setupWebAuthn(e *echo.Group) error {
+func (h *Handler) SetupRoutes(e *echo.Group) {
 	webAuthn, err := auth.NewWebAuthnService()
 	if err != nil {
-		return fmt.Errorf("failed to create webauthn service: %w", err)
+		log.Err(err).Msg("failed to create webauthn service")
+		return
 	}
-
-	cache, err := newDefaultCache[*webauthnSession]()
-	if err != nil {
-		return fmt.Errorf("failed to create webauthn cache: %w", err)
-	}
-
-	wa := webauthnApi{
-		userService:       a.Users,
-		credentialService: a.Credentials,
-		cache:             cache,
-		webAuthn:          webAuthn,
-		jwtService:        a.JWT,
-	}
+	h.webAuthn = webAuthn
 
 	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
 		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
@@ -61,12 +66,10 @@ func (a *Api) setupWebAuthn(e *echo.Group) error {
 		}),
 	}))
 
-	e.POST("/register/start", wa.registerStart)
-	e.POST("/register/finish", wa.registerFinish)
-	e.POST("/login/start", wa.loginStart)
-	e.POST("/login/finish", wa.loginFinish)
-
-	return nil
+	e.POST("/register/start", h.registerStart)
+	e.POST("/register/finish", h.registerFinish)
+	e.POST("/login/start", h.loginStart)
+	e.POST("/login/finish", h.loginFinish)
 }
 
 type registerStartRequest struct {
@@ -83,7 +86,7 @@ func validateDisplayName(name string) error {
 	return nil
 }
 
-func (api *webauthnApi) registerStart(c *echo.Context) error {
+func (h *Handler) registerStart(c *echo.Context) error {
 	var request registerStartRequest
 	if err := c.Bind(&request); err != nil {
 		log.Err(err).Msg("failed to bind webauthn register start request")
@@ -95,7 +98,7 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	userID, err := api.userService.Create(c.Request().Context(), "webauthn", request.DisplayName)
+	userID, err := h.userService.Create(c.Request().Context(), "webauthn", request.DisplayName)
 	if err != nil {
 		log.Err(err).Msg("failed to insert user")
 		return c.String(500, "server error")
@@ -106,27 +109,27 @@ func (api *webauthnApi) registerStart(c *echo.Context) error {
 		DisplayName: request.DisplayName,
 	}
 
-	creation, session, err := api.webAuthn.WebAuthn.BeginRegistration(user,
+	creation, sessionData, err := h.webAuthn.WebAuthn.BeginRegistration(user,
 		webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired),
 		webauthn.WithExtensions(protocol.AuthenticationExtensions{"credProps": true}),
 	)
 	if err != nil {
 		log.Err(err).Msg("failed to begin webauthn registration")
 
-		if delErr := api.userService.Delete(c.Request().Context(), userID); delErr != nil {
+		if delErr := h.userService.Delete(c.Request().Context(), userID); delErr != nil {
 			log.Err(delErr).Int64("userID", userID).Msg("failed to delete user after BeginRegistration failure")
 		}
 
 		return c.String(500, "server error")
 	}
 
-	api.cache.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: userID}, 1, 2*time.Minute)
-	api.cache.Wait()
+	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID}, 1, 2*time.Minute)
+	h.cache.Wait()
 
 	return c.JSON(200, creation)
 }
 
-func (api *webauthnApi) registerFinish(c *echo.Context) error {
+func (h *Handler) registerFinish(c *echo.Context) error {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
@@ -144,44 +147,44 @@ func (api *webauthnApi) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	ws, found := api.cache.Get(challenge)
-	if !found || ws == nil || ws.session == nil {
+	s, found := h.cache.Get(challenge)
+	if !found || s == nil || s.sessionData == nil {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := api.userService.LoadWebAuthnUser(c.Request().Context(), ws.userID)
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), s.userID)
 	if err != nil {
-		log.Err(err).Int64("userID", ws.userID).Msg("failed to load user")
-		api.cache.Del(challenge)
+		log.Err(err).Int64("userID", s.userID).Msg("failed to load user")
+		h.cache.Del(challenge)
 		return c.String(500, "server error")
 	}
 
-	credential, err := api.webAuthn.WebAuthn.CreateCredential(user, *ws.session, parsedResponse)
+	credential, err := h.webAuthn.WebAuthn.CreateCredential(user, *s.sessionData, parsedResponse)
 	if err != nil {
 		log.Err(err).Msg("failed to create credential")
-		api.cache.Del(challenge)
+		h.cache.Del(challenge)
 
-		if delErr := api.userService.Delete(c.Request().Context(), ws.userID); delErr != nil {
-			log.Err(delErr).Int64("userID", ws.userID).Msg("failed to delete user after failed registration")
+		if delErr := h.userService.Delete(c.Request().Context(), s.userID); delErr != nil {
+			log.Err(delErr).Int64("userID", s.userID).Msg("failed to delete user after failed registration")
 		}
 
 		return c.String(400, "invalid request")
 	}
 
-	if err := api.credentialService.Persist(c.Request().Context(), ws.userID, credential); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential); err != nil {
 		log.Err(err).Msg("failed to persist credential")
-		api.cache.Del(challenge)
+		h.cache.Del(challenge)
 
-		if delErr := api.userService.Delete(c.Request().Context(), ws.userID); delErr != nil {
-			log.Err(delErr).Int64("userID", ws.userID).Msg("failed to delete user after persist credential failure")
+		if delErr := h.userService.Delete(c.Request().Context(), s.userID); delErr != nil {
+			log.Err(delErr).Int64("userID", s.userID).Msg("failed to delete user after persist credential failure")
 		}
 
 		return c.String(500, "server error")
 	}
 
-	api.cache.Del(challenge)
+	h.cache.Del(challenge)
 
-	token, err := api.jwtService.GenerateToken(ws.userID)
+	token, err := h.jwtService.GenerateToken(s.userID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt")
 		return c.String(500, "server error")
@@ -190,20 +193,20 @@ func (api *webauthnApi) registerFinish(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"token": token})
 }
 
-func (api *webauthnApi) loginStart(c *echo.Context) error {
-	assertion, session, err := api.webAuthn.WebAuthn.BeginDiscoverableLogin()
+func (h *Handler) loginStart(c *echo.Context) error {
+	assertion, sessionData, err := h.webAuthn.WebAuthn.BeginDiscoverableLogin()
 	if err != nil {
 		log.Err(err).Msg("failed to begin discoverable login")
 		return c.String(500, "server error")
 	}
 
-	api.cache.SetWithTTL(session.Challenge, &webauthnSession{session: session}, 1, 2*time.Minute)
-	api.cache.Wait()
+	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData}, 1, 2*time.Minute)
+	h.cache.Wait()
 
 	return c.JSON(200, assertion)
 }
 
-func (api *webauthnApi) loginFinish(c *echo.Context) error {
+func (h *Handler) loginFinish(c *echo.Context) error {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
@@ -221,8 +224,8 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	ws, found := api.cache.Get(challenge)
-	if !found || ws == nil || ws.session == nil {
+	s, found := h.cache.Get(challenge)
+	if !found || s == nil || s.sessionData == nil {
 		return c.String(400, "invalid request")
 	}
 
@@ -232,7 +235,7 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 			return nil, fmt.Errorf("failed to decode user handle: %w", err)
 		}
 
-		user, err := api.userService.LoadWebAuthnUser(c.Request().Context(), userID)
+		user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load user: %w", err)
 		}
@@ -240,24 +243,24 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 		return user, nil
 	}
 
-	resolvedUser, validatedCredential, err := api.webAuthn.WebAuthn.ValidatePasskeyLogin(handler, *ws.session, parsedResponse)
+	resolvedUser, validatedCredential, err := h.webAuthn.WebAuthn.ValidatePasskeyLogin(handler, *s.sessionData, parsedResponse)
 	if err != nil {
 		log.Err(err).Msg("failed to validate passkey login")
-		api.cache.Del(challenge)
+		h.cache.Del(challenge)
 		return c.String(401, "invalid credentials")
 	}
 
-	if err := api.credentialService.Update(c.Request().Context(), validatedCredential); err != nil {
+	if err := h.credentialService.Update(c.Request().Context(), validatedCredential); err != nil {
 		log.Err(err).Msg("failed to update credential")
-		api.cache.Del(challenge)
+		h.cache.Del(challenge)
 		return c.String(500, "server error")
 	}
 
-	api.cache.Del(challenge)
+	h.cache.Del(challenge)
 
 	webAuthnUser := resolvedUser.(*auth.WebAuthnUser)
 
-	token, err := api.jwtService.GenerateToken(webAuthnUser.ID)
+	token, err := h.jwtService.GenerateToken(webAuthnUser.ID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt")
 		return c.String(500, "server error")
@@ -265,7 +268,3 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 
 	return c.JSON(200, map[string]string{"token": token})
 }
-
-
-
-

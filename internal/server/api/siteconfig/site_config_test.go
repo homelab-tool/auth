@@ -1,4 +1,4 @@
-package api_test
+package siteconfig_test
 
 import (
 	"encoding/json"
@@ -11,13 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
 	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/testhelpers"
 )
 
 func TestSiteConfigAPICreate(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
-	token := opaqueRegisterAndLogin(t, srv, "create-test-user", "password")
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "create-test-user", "password")
 
 	body := `{"hostname":"app1.example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/site-configs", strings.NewReader(body))
@@ -36,9 +38,9 @@ func TestSiteConfigAPICreate(t *testing.T) {
 }
 
 func TestSiteConfigAPICreateDuplicate(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
-	token := opaqueRegisterAndLogin(t, srv, "dup-test-user", "password")
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "dup-test-user", "password")
 
 	body := `{"hostname":"app1.example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/site-configs", strings.NewReader(body))
@@ -57,8 +59,8 @@ func TestSiteConfigAPICreateDuplicate(t *testing.T) {
 }
 
 func TestSiteConfigAPICreateUnauthenticated(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
 
 	body := `{"hostname":"app1.example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/site-configs", strings.NewReader(body))
@@ -69,9 +71,9 @@ func TestSiteConfigAPICreateUnauthenticated(t *testing.T) {
 }
 
 func TestSiteConfigAPIList(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
-	token := opaqueRegisterAndLogin(t, srv, "list-test-user", "password")
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "list-test-user", "password")
 
 	for _, host := range []string{"app2.example.com", "app1.example.com"} {
 		body := fmt.Sprintf(`{"hostname":"%s"}`, host)
@@ -98,9 +100,9 @@ func TestSiteConfigAPIList(t *testing.T) {
 }
 
 func TestSiteConfigAPIDelete(t *testing.T) {
-	db := newTestDB(t)
-	srv := newTestServer(t, db, nil)
-	token := opaqueRegisterAndLogin(t, srv, "delete-test-user", "password")
+	db := testhelpers.NewTestDB(t)
+	srv := apitest.NewTestServer(t, db, nil)
+	token := apitest.OpaqueRegisterAndLogin(t, srv, "delete-test-user", "password")
 
 	body := `{"hostname":"app1.example.com"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/site-configs", strings.NewReader(body))

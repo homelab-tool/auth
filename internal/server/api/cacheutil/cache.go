@@ -1,8 +1,8 @@
-package api
+package cacheutil
 
 import "github.com/dgraph-io/ristretto/v2"
 
-func newDefaultCache[T any]() (*ristretto.Cache[string, T], error) {
+func NewCache[T any]() (*ristretto.Cache[string, T], error) {
 	return ristretto.NewCache(&ristretto.Config[string, T]{
 		NumCounters: 1e6,
 		MaxCost:     1e4,

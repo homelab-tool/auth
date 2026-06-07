@@ -1,4 +1,4 @@
-package api
+package opaque
 
 import (
 	"database/sql"
@@ -11,6 +11,8 @@ import (
 	"github.com/bytemare/opaque"
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
+	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -20,79 +22,53 @@ import (
 const maxPayloadSize = 65536
 const maxClientIdLen = 256
 
-var base64Encoding = base64.RawURLEncoding
-
-type opaqueApi struct {
-	opaqueService *service.OpaqueService
-	cache         *ristretto.Cache[string, []byte]
-	loginCache    *ristretto.Cache[string, *loginState]
-	opaqueServer  *opaque.Server
-	fakeRecord    *opaque.ClientRecord
-	jwtService    *auth.JWTService
-	secondFactor  *secondFactorHandler
-}
-
-type loginState struct {
+type LoginState struct {
 	serverOutput *opaque.ServerOutput
 	userId       int64
 }
 
-func (a *Api) setupOpaque(e *echo.Group) error {
-	opaqueServer, err := auth.CreateOpaqueServer(a.DB)
+type Handler struct {
+	opaqueService *service.OpaqueService
+	cache         *ristretto.Cache[string, []byte]
+	loginCache    *ristretto.Cache[string, *LoginState]
+	opaqueServer  *opaque.Server
+	fakeRecord    *opaque.ClientRecord
+	jwtService    *auth.JWTService
+	secondFactor  *secondfactor.Handler
+}
+
+func NewHandler(opaqueService *service.OpaqueService, jwtService *auth.JWTService, db *sql.DB, secondFactor *secondfactor.Handler) (*Handler, error) {
+	opaqueServer, err := auth.CreateOpaqueServer(db)
 	if err != nil {
 		log.Err(err).Msg("failed to setup opaque for server")
-		return err
+		return nil, err
 	}
 
 	fakeRecord, err := auth.ServerConfig().GetFakeRecord([]byte("fake-client"))
 	if err != nil {
 		log.Err(err).Msg("failed to generate fake opaque record")
-		return err
+		return nil, err
 	}
 
-	cache, err := newDefaultCache[[]byte]()
+	cache, err := cacheutil.NewCache[[]byte]()
 	if err != nil {
-		log.Err(err).Msg("failed to create cache")
-		return err
+		return nil, fmt.Errorf("failed to create opaque cache: %w", err)
 	}
 
-	loginCache, err := newDefaultCache[*loginState]()
+	loginCache, err := cacheutil.NewCache[*LoginState]()
 	if err != nil {
-		log.Err(err).Msg("failed to create login cache")
-		return err
+		return nil, fmt.Errorf("failed to create opaque login cache: %w", err)
 	}
 
-	sfHandler, err := newSecondFactorHandler(a.Users, a.Credentials, a.JWT, a.WebAuthn, a.SecondFactorSvc, a.TOTP)
-	if err != nil {
-		return err
-	}
-
-	api := opaqueApi{
-		opaqueService: a.Opaque,
+	return &Handler{
+		opaqueService: opaqueService,
 		cache:         cache,
 		loginCache:    loginCache,
 		opaqueServer:  opaqueServer,
 		fakeRecord:    fakeRecord,
-		jwtService:    a.JWT,
-		secondFactor:  sfHandler,
-	}
-
-	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
-		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
-			Rate:      5,
-			Burst:     10,
-			ExpiresIn: 3 * time.Minute,
-		}),
-	}))
-
-	e.POST("/register/start", api.registerStart)
-	e.POST("/register/finish", api.registerFinish)
-	e.POST("/login/start", api.loginStart)
-	e.POST("/login/finish", api.loginFinish)
-
-	sfHandler.setupRoutes(e, jwtMiddleware(a.JWT))
-
-	return nil
+		jwtService:    jwtService,
+		secondFactor:  secondFactor,
+	}, nil
 }
 
 type RegisterRequest struct {
@@ -115,7 +91,7 @@ func bindAndValidateOPAQUERequest(c *echo.Context) (string, []byte, error) {
 		return "", nil, fmt.Errorf("payload too large: %w", err)
 	}
 
-	payload, err := base64Encoding.DecodeString(request.Payload)
+	payload, err := base64.RawURLEncoding.DecodeString(request.Payload)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to decode payload: %w", err)
 	}
@@ -143,14 +119,33 @@ func checkPayloadSize(raw string) error {
 	return nil
 }
 
-func (api *opaqueApi) registerStart(c *echo.Context) error {
+func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
+	e.Use(middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{
+		Store: middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+			Rate:      5,
+			Burst:     10,
+			ExpiresIn: 3 * time.Minute,
+		}),
+	}))
+
+	e.POST("/register/start", h.registerStart)
+	e.POST("/register/finish", h.registerFinish)
+	e.POST("/login/start", h.loginStart)
+	e.POST("/login/finish", h.loginFinish)
+
+	if h.secondFactor != nil {
+		h.secondFactor.SetupSubRoutes(e, jwtMiddleware)
+	}
+}
+
+func (h *Handler) registerStart(c *echo.Context) error {
 	clientId, payload, err := bindAndValidateOPAQUERequest(c)
 	if err != nil {
 		log.Err(err).Msg("failed to bind registration request")
 		return c.String(400, "invalid request")
 	}
 
-	userExists, err := api.opaqueService.IsClientIDTaken(c.Request().Context(), clientId)
+	userExists, err := h.opaqueService.IsClientIDTaken(c.Request().Context(), clientId)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to check for taken client id")
 		return c.String(500, "server error")
@@ -160,88 +155,88 @@ func (api *opaqueApi) registerStart(c *echo.Context) error {
 		return c.String(409, "client id is already taken")
 	}
 
-	registrationRequest, err := api.opaqueServer.Deserialize.RegistrationRequest(payload)
+	registrationRequest, err := h.opaqueServer.Deserialize.RegistrationRequest(payload)
 	if err != nil {
 		log.Err(err).Msg("failed to deserialize registration request")
 		return c.String(400, "invalid request")
 	}
 
 	credentialId := opaque.RandomBytes(64)
-	api.cache.SetWithTTL(clientId, credentialId, 1, time.Minute)
-	api.cache.Wait()
+	h.cache.SetWithTTL(clientId, credentialId, 1, time.Minute)
+	h.cache.Wait()
 
-	registrationResponse, err := api.opaqueServer.RegistrationResponse(registrationRequest, credentialId, nil)
+	registrationResponse, err := h.opaqueServer.RegistrationResponse(registrationRequest, credentialId, nil)
 	if err != nil {
 		log.Err(err).Msg("failed to generate registration response")
 		return c.String(500, "server error")
 	}
 
 	responseBytes := registrationResponse.Serialize()
-	encodedResponse := base64Encoding.EncodeToString(responseBytes)
+	encodedResponse := base64.RawURLEncoding.EncodeToString(responseBytes)
 
 	return c.String(200, encodedResponse)
 }
 
-func (api *opaqueApi) registerFinish(c *echo.Context) error {
+func (h *Handler) registerFinish(c *echo.Context) error {
 	clientId, payload, err := bindAndValidateOPAQUERequest(c)
 	if err != nil {
 		log.Err(err).Msg("failed to bind registration finish request")
 		return c.String(400, "invalid request")
 	}
 
-	credentialId, foundClientId := api.cache.Get(clientId)
+	credentialId, foundClientId := h.cache.Get(clientId)
 	if !foundClientId || credentialId == nil {
 		return c.String(400, "invalid request")
 	}
 
-	registrationRecord, err := api.opaqueServer.Deserialize.RegistrationRecord(payload)
+	registrationRecord, err := h.opaqueServer.Deserialize.RegistrationRecord(payload)
 	if err != nil {
 		log.Err(err).Msg("failed to deserialize registration record")
 		return c.String(400, "invalid request")
 	}
 
 	recordBytes := registrationRecord.Serialize()
-	encodedRecord := base64Encoding.EncodeToString(recordBytes)
-	encodedCredentialId := base64Encoding.EncodeToString(credentialId)
+	encodedRecord := base64.RawURLEncoding.EncodeToString(recordBytes)
+	encodedCredentialId := base64.RawURLEncoding.EncodeToString(credentialId)
 
-	_, err = api.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord)
+	_, err = h.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to create opaque user")
 		return c.String(500, "server error")
 	}
 
-	api.cache.Del(clientId)
+	h.cache.Del(clientId)
 
 	return c.String(200, "registered!")
 }
 
-func (api *opaqueApi) loginStart(c *echo.Context) error {
+func (h *Handler) loginStart(c *echo.Context) error {
 	clientId, payload, err := bindAndValidateOPAQUERequest(c)
 	if err != nil {
 		log.Err(err).Msg("failed to bind login start request")
 		return c.String(400, "invalid request")
 	}
 
-	ke1, err := api.opaqueServer.Deserialize.KE1(payload)
+	ke1, err := h.opaqueServer.Deserialize.KE1(payload)
 	if err != nil {
 		log.Err(err).Msg("failed to deserialize KE1")
 		return c.String(400, "invalid request")
 	}
 
-	data, err := api.opaqueService.GetUserData(c.Request().Context(), clientId)
+	data, err := h.opaqueService.GetUserData(c.Request().Context(), clientId)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			ke2, serverOutput, err := api.opaqueServer.GenerateKE2(ke1, api.fakeRecord)
+			ke2, serverOutput, err := h.opaqueServer.GenerateKE2(ke1, h.fakeRecord)
 			if err != nil {
 				log.Err(err).Str("clientId", clientId).Msg("failed to generate fake KE2")
 				return c.String(500, "server error")
 			}
 
-			api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput}, 1, time.Minute)
-			api.loginCache.Wait()
+			h.loginCache.SetWithTTL(clientId, &LoginState{serverOutput: serverOutput}, 1, time.Minute)
+			h.loginCache.Wait()
 
 			ke2Bytes := ke2.Serialize()
-			encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
+			encodedResponse := base64.RawURLEncoding.EncodeToString(ke2Bytes)
 
 			return c.String(200, encodedResponse)
 		}
@@ -250,19 +245,19 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	credentialId, err := base64Encoding.DecodeString(data.EncodedCredentialID)
+	credentialId, err := base64.RawURLEncoding.DecodeString(data.EncodedCredentialID)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to decode credential id")
 		return c.String(500, "server error")
 	}
 
-	recordBytes, err := base64Encoding.DecodeString(data.EncodedRecord)
+	recordBytes, err := base64.RawURLEncoding.DecodeString(data.EncodedRecord)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to decode registration record")
 		return c.String(500, "server error")
 	}
 
-	registrationRecord, err := api.opaqueServer.Deserialize.RegistrationRecord(recordBytes)
+	registrationRecord, err := h.opaqueServer.Deserialize.RegistrationRecord(recordBytes)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to deserialize registration record")
 		return c.String(500, "server error")
@@ -274,48 +269,48 @@ func (api *opaqueApi) loginStart(c *echo.Context) error {
 		RegistrationRecord:   registrationRecord,
 	}
 
-	ke2, serverOutput, err := api.opaqueServer.GenerateKE2(ke1, clientRecord)
+	ke2, serverOutput, err := h.opaqueServer.GenerateKE2(ke1, clientRecord)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to generate KE2")
 		return c.String(500, "server error")
 	}
 
-	api.loginCache.SetWithTTL(clientId, &loginState{serverOutput: serverOutput, userId: data.UserID}, 1, time.Minute)
-	api.loginCache.Wait()
+	h.loginCache.SetWithTTL(clientId, &LoginState{serverOutput: serverOutput, userId: data.UserID}, 1, time.Minute)
+	h.loginCache.Wait()
 
 	ke2Bytes := ke2.Serialize()
-	encodedResponse := base64Encoding.EncodeToString(ke2Bytes)
+	encodedResponse := base64.RawURLEncoding.EncodeToString(ke2Bytes)
 
 	return c.String(200, encodedResponse)
 }
 
-func (api *opaqueApi) loginFinish(c *echo.Context) error {
+func (h *Handler) loginFinish(c *echo.Context) error {
 	clientId, payload, err := bindAndValidateOPAQUERequest(c)
 	if err != nil {
 		log.Err(err).Msg("failed to bind login finish request")
 		return c.String(400, "invalid request")
 	}
 
-	ke3, err := api.opaqueServer.Deserialize.KE3(payload)
+	ke3, err := h.opaqueServer.Deserialize.KE3(payload)
 	if err != nil {
 		log.Err(err).Msg("failed to deserialize KE3")
 		return c.String(400, "invalid request")
 	}
 
-	state, found := api.loginCache.Get(clientId)
+	state, found := h.loginCache.Get(clientId)
 	if !found || state == nil || state.serverOutput == nil {
 		return c.String(400, "invalid request")
 	}
 
-	if err := api.opaqueServer.LoginFinish(ke3, state.serverOutput.ClientMAC); err != nil {
+	if err := h.opaqueServer.LoginFinish(ke3, state.serverOutput.ClientMAC); err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("login finish failed")
 		return c.String(401, "invalid credentials")
 	}
 
-	api.loginCache.Del(clientId)
+	h.loginCache.Del(clientId)
 
-	if api.secondFactor != nil {
-		result, err := api.secondFactor.checkPending(state.userId)
+	if h.secondFactor != nil {
+		result, err := h.secondFactor.CheckPending(state.userId)
 		if err != nil {
 			log.Err(err).Int64("userId", state.userId).Msg("failed to check 2fa requirement")
 			return c.String(500, "server error")
@@ -330,7 +325,7 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 		}
 	}
 
-	token, err := api.jwtService.GenerateToken(state.userId)
+	token, err := h.jwtService.GenerateToken(state.userId)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to generate jwt")
 		return c.String(500, "server error")

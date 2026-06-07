@@ -4,6 +4,10 @@ import (
 	"database/sql"
 
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api/opaque"
+	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
+	"github.com/homelab-tool/auth/internal/server/api/siteconfig"
+	"github.com/homelab-tool/auth/internal/server/api/webauthn"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 )
@@ -21,17 +25,33 @@ type Api struct {
 }
 
 func (api *Api) SetupRoutes(e *echo.Group) error {
-	if err := api.setupOpaque(e.Group("/opaque")); err != nil {
+	sfHandler, err := secondfactor.NewHandler(
+		api.Users, api.Credentials, api.JWT, api.WebAuthn,
+		api.SecondFactorSvc, api.TOTP,
+	)
+	if err != nil {
 		return err
 	}
 
-	if err := api.setupWebAuthn(e.Group("/webauthn")); err != nil {
+	opaqueHandler, err := opaque.NewHandler(
+		api.Opaque, api.JWT, api.DB, sfHandler,
+	)
+	if err != nil {
 		return err
 	}
+
+	webAuthnHandler, err := webauthn.NewHandler(api.Users, api.Credentials, api.JWT)
+	if err != nil {
+		return err
+	}
+
+	siteConfigHandler := siteconfig.NewHandler(api.SiteConfigs)
+
+	opaqueHandler.SetupRoutes(e.Group("/opaque"), jwtMiddleware(api.JWT))
+	webAuthnHandler.SetupRoutes(e.Group("/webauthn"))
+	siteConfigHandler.SetupRoutes(e.Group("/site-configs"), jwtMiddleware(api.JWT))
 
 	e.GET("/whoami", api.whoami, jwtMiddleware(api.JWT))
-
-	api.setupSiteConfigs(e.Group("/site-configs"), jwtMiddleware(api.JWT))
 
 	return nil
 }

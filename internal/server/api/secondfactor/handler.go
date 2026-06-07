@@ -1,7 +1,8 @@
-package api
+package secondfactor
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,45 +12,49 @@ import (
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
 
-type pending2FAState struct {
+const maxBodySize = 1 << 20
+const contextKeyClaims = "claims"
+
+type Pending2FAState struct {
 	userID int64
 }
 
-type secondFactorResult struct {
+type Result struct {
 	Requires2FA bool
 	SessionID   string
 	Methods     []string
 }
 
-type secondFactorHandler struct {
+type Handler struct {
 	userService       *service.UserService
 	credentialService *service.CredentialService
 	jwtService        *auth.JWTService
 	webAuthn          *auth.WebAuthnService
 	secondFactorSvc   service.SecondFactorService
 	totpService       *service.TOTPService
-	pending2FA        *ristretto.Cache[string, *pending2FAState]
-	webauthn2FA       *ristretto.Cache[string, *webauthnSession]
+	pending2FA        *ristretto.Cache[string, *Pending2FAState]
+	webauthn2FA       *ristretto.Cache[string, *webauthn.SessionData]
 }
 
-func newSecondFactorHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc service.SecondFactorService, totpSvc *service.TOTPService) (*secondFactorHandler, error) {
-	pending2FA, err := newDefaultCache[*pending2FAState]()
+func NewHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService, webAuthn *auth.WebAuthnService, svc service.SecondFactorService, totpSvc *service.TOTPService) (*Handler, error) {
+	pending2FA, err := cacheutil.NewCache[*Pending2FAState]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pending 2fa cache: %w", err)
 	}
 
-	webauthn2FA, err := newDefaultCache[*webauthnSession]()
+	webauthn2FA, err := cacheutil.NewCache[*webauthn.SessionData]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webauthn 2fa cache: %w", err)
 	}
 
-	return &secondFactorHandler{
+	return &Handler{
 		userService:       userService,
 		credentialService: credentialService,
 		jwtService:        jwtService,
@@ -61,9 +66,9 @@ func newSecondFactorHandler(userService *service.UserService, credentialService 
 	}, nil
 }
 
-func (h *secondFactorHandler) checkPending(userID int64) (*secondFactorResult, error) {
+func (h *Handler) CheckPending(userID int64) (*Result, error) {
 	if h.secondFactorSvc == nil {
-		return &secondFactorResult{}, nil
+		return &Result{}, nil
 	}
 
 	required, err := h.secondFactorSvc.Required(userID)
@@ -71,7 +76,7 @@ func (h *secondFactorHandler) checkPending(userID int64) (*secondFactorResult, e
 		return nil, err
 	}
 	if !required {
-		return &secondFactorResult{}, nil
+		return &Result{}, nil
 	}
 
 	methods, err := h.secondFactorSvc.Methods(userID)
@@ -80,17 +85,17 @@ func (h *secondFactorHandler) checkPending(userID int64) (*secondFactorResult, e
 	}
 
 	sessionID := generateSessionID()
-	h.pending2FA.SetWithTTL(sessionID, &pending2FAState{userID: userID}, 1, 5*time.Minute)
+	h.pending2FA.SetWithTTL(sessionID, &Pending2FAState{userID: userID}, 1, 5*time.Minute)
 	h.pending2FA.Wait()
 
-	return &secondFactorResult{
+	return &Result{
 		Requires2FA: true,
 		SessionID:   sessionID,
 		Methods:     methods,
 	}, nil
 }
 
-func (h *secondFactorHandler) setupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
+func (h *Handler) SetupSubRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
 	e.POST("/login/2fa/webauthn/start", h.login2FAStart)
 	e.POST("/login/2fa/webauthn/finish", h.login2FAFinish)
 	e.POST("/login/2fa/totp", h.login2FATOTP)
@@ -103,7 +108,7 @@ func (h *secondFactorHandler) setupRoutes(e *echo.Group, jwtMiddleware echo.Midd
 	reg.POST("/totp/verify", h.register2FATOTPVerify)
 }
 
-func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
+func (h *Handler) login2FAStart(c *echo.Context) error {
 	var request struct {
 		SessionID string `json:"sessionId"`
 	}
@@ -129,13 +134,13 @@ func (h *secondFactorHandler) login2FAStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	h.webauthn2FA.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: pending.userID}, 1, 2*time.Minute)
+	h.webauthn2FA.SetWithTTL(session.Challenge, session, 1, 2*time.Minute)
 	h.webauthn2FA.Wait()
 
 	return c.JSON(200, assertion)
 }
 
-func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
+func (h *Handler) login2FAFinish(c *echo.Context) error {
 	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
@@ -170,19 +175,19 @@ func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	ws, found := h.webauthn2FA.Get(challenge)
-	if !found || ws == nil || ws.session == nil {
+	session, found := h.webauthn2FA.Get(challenge)
+	if !found || session == nil {
 		return c.String(400, "invalid request")
 	}
 
-	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), ws.userID)
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), pending.userID)
 	if err != nil {
-		log.Err(err).Int64("userID", ws.userID).Msg("failed to load user for 2fa verification")
+		log.Err(err).Int64("userID", pending.userID).Msg("failed to load user for 2fa verification")
 		h.webauthn2FA.Del(challenge)
 		return c.String(500, "server error")
 	}
 
-	validatedCredential, err := h.webAuthn.WebAuthn.ValidateLogin(user, *ws.session, parsedResponse)
+	validatedCredential, err := h.webAuthn.WebAuthn.ValidateLogin(user, *session, parsedResponse)
 	if err != nil {
 		log.Err(err).Msg("failed to validate webauthn login for 2fa")
 		h.webauthn2FA.Del(challenge)
@@ -205,7 +210,7 @@ func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"token": token})
 }
 
-func (h *secondFactorHandler) register2FAStart(c *echo.Context) error {
+func (h *Handler) register2FAStart(c *echo.Context) error {
 	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
@@ -237,13 +242,13 @@ func (h *secondFactorHandler) register2FAStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	h.webauthn2FA.SetWithTTL(session.Challenge, &webauthnSession{session: session, userID: userID}, 1, 2*time.Minute)
+	h.webauthn2FA.SetWithTTL(session.Challenge, session, 1, 2*time.Minute)
 	h.webauthn2FA.Wait()
 
 	return c.JSON(200, creation)
 }
 
-func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
+func (h *Handler) register2FAFinish(c *echo.Context) error {
 	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
@@ -272,8 +277,8 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	ws, found := h.webauthn2FA.Get(challenge)
-	if !found || ws == nil || ws.session == nil {
+	session, found := h.webauthn2FA.Get(challenge)
+	if !found || session == nil {
 		return c.String(400, "invalid request")
 	}
 
@@ -284,7 +289,7 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	credential, err := h.webAuthn.WebAuthn.CreateCredential(user, *ws.session, parsedResponse)
+	credential, err := h.webAuthn.WebAuthn.CreateCredential(user, *session, parsedResponse)
 	if err != nil {
 		log.Err(err).Msg("failed to create credential for 2fa")
 		h.webauthn2FA.Del(challenge)
@@ -308,7 +313,7 @@ func (h *secondFactorHandler) register2FAFinish(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"status": "ok"})
 }
 
-func (h *secondFactorHandler) login2FATOTP(c *echo.Context) error {
+func (h *Handler) login2FATOTP(c *echo.Context) error {
 	var request struct {
 		SessionID string `json:"sessionId"`
 		Code      string `json:"code"`
@@ -347,7 +352,7 @@ func (h *secondFactorHandler) login2FATOTP(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"token": token})
 }
 
-func (h *secondFactorHandler) register2FATOTPGenerate(c *echo.Context) error {
+func (h *Handler) register2FATOTPGenerate(c *echo.Context) error {
 	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
@@ -374,7 +379,7 @@ func (h *secondFactorHandler) register2FATOTPGenerate(c *echo.Context) error {
 	return c.JSON(200, result)
 }
 
-func (h *secondFactorHandler) register2FATOTPVerify(c *echo.Context) error {
+func (h *Handler) register2FATOTPVerify(c *echo.Context) error {
 	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
@@ -414,7 +419,7 @@ func (h *secondFactorHandler) register2FATOTPVerify(c *echo.Context) error {
 func generateSessionID() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
-	return base64Encoding.EncodeToString(b)
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func parseUserID(subject string) (int64, error) {
