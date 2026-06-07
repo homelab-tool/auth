@@ -315,7 +315,7 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 	api.loginCache.Del(clientId)
 
 	if api.secondFactor != nil {
-		result, err := api.secondFactor.checkPending(state.userId, clientId)
+		result, err := api.secondFactor.checkPending(state.userId)
 		if err != nil {
 			log.Err(err).Int64("userId", state.userId).Msg("failed to check 2fa requirement")
 			return c.String(500, "server error")
@@ -330,7 +330,7 @@ func (api *opaqueApi) loginFinish(c *echo.Context) error {
 		}
 	}
 
-	token, err := api.jwtService.GenerateToken(state.userId, clientId)
+	token, err := api.jwtService.GenerateToken(state.userId)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to generate jwt")
 		return c.String(500, "server error")

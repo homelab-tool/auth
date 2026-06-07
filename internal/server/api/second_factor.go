@@ -18,8 +18,7 @@ import (
 )
 
 type pending2FAState struct {
-	userID   int64
-	clientID string
+	userID int64
 }
 
 type secondFactorResult struct {
@@ -62,7 +61,7 @@ func newSecondFactorHandler(userService *service.UserService, credentialService 
 	}, nil
 }
 
-func (h *secondFactorHandler) checkPending(userID int64, clientID string) (*secondFactorResult, error) {
+func (h *secondFactorHandler) checkPending(userID int64) (*secondFactorResult, error) {
 	if h.secondFactorSvc == nil {
 		return &secondFactorResult{}, nil
 	}
@@ -81,7 +80,7 @@ func (h *secondFactorHandler) checkPending(userID int64, clientID string) (*seco
 	}
 
 	sessionID := generateSessionID()
-	h.pending2FA.SetWithTTL(sessionID, &pending2FAState{userID: userID, clientID: clientID}, 1, 5*time.Minute)
+	h.pending2FA.SetWithTTL(sessionID, &pending2FAState{userID: userID}, 1, 5*time.Minute)
 	h.pending2FA.Wait()
 
 	return &secondFactorResult{
@@ -197,7 +196,7 @@ func (h *secondFactorHandler) login2FAFinish(c *echo.Context) error {
 	h.webauthn2FA.Del(challenge)
 	h.pending2FA.Del(envelope.SessionID)
 
-	token, err := h.jwtService.GenerateToken(pending.userID, pending.clientID)
+	token, err := h.jwtService.GenerateToken(pending.userID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt after 2fa")
 		return c.String(500, "server error")
@@ -339,7 +338,7 @@ func (h *secondFactorHandler) login2FATOTP(c *echo.Context) error {
 
 	h.pending2FA.Del(request.SessionID)
 
-	token, err := h.jwtService.GenerateToken(pending.userID, pending.clientID)
+	token, err := h.jwtService.GenerateToken(pending.userID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt after 2fa")
 		return c.String(500, "server error")

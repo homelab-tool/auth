@@ -17,14 +17,13 @@ func TestJWTServiceGenerateAndValidate(t *testing.T) {
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
-	token, err := svc.GenerateToken(1, "testuser")
+	token, err := svc.GenerateToken(1)
 	require.NoError(t, err)
 	require.NotEmpty(t, token)
 
 	claims, err := svc.ValidateToken(token)
 	require.NoError(t, err)
 	assert.Equal(t, "1", claims.Subject)
-	assert.Equal(t, "testuser", claims.ClientID)
 	assert.Equal(t, "auth", claims.Issuer)
 }
 
@@ -38,7 +37,6 @@ func TestJWTServiceValidateExpiredToken(t *testing.T) {
 	require.NoError(t, err)
 
 	claims := &auth.Claims{
-		ClientID: "testuser",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "1",
 			IssuedAt:  jwt.NewNumericDate(time.Now().Add(-48 * time.Hour)),
@@ -61,7 +59,6 @@ func TestJWTServiceValidateWrongSigningMethod(t *testing.T) {
 	require.NoError(t, err)
 
 	claims := &auth.Claims{
-		ClientID: "testuser",
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   "1",
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -101,21 +98,19 @@ func TestJWTServiceGenerateMultipleTokens(t *testing.T) {
 	svc, err := auth.NewJWTService(db)
 	require.NoError(t, err)
 
-	t1, err := svc.GenerateToken(1, "user1")
+	t1, err := svc.GenerateToken(1)
 	require.NoError(t, err)
-	t2, err := svc.GenerateToken(2, "user2")
+	t2, err := svc.GenerateToken(2)
 	require.NoError(t, err)
 	assert.NotEqual(t, t1, t2)
 
 	c1, err := svc.ValidateToken(t1)
 	require.NoError(t, err)
 	assert.Equal(t, "1", c1.Subject)
-	assert.Equal(t, "user1", c1.ClientID)
 
 	c2, err := svc.ValidateToken(t2)
 	require.NoError(t, err)
 	assert.Equal(t, "2", c2.Subject)
-	assert.Equal(t, "user2", c2.ClientID)
 }
 
 func TestJWTServiceCrossDBValidation(t *testing.T) {
@@ -127,7 +122,7 @@ func TestJWTServiceCrossDBValidation(t *testing.T) {
 	svc2, err := auth.NewJWTService(db2)
 	require.NoError(t, err)
 
-	token, err := svc1.GenerateToken(1, "testuser")
+	token, err := svc1.GenerateToken(1)
 	require.NoError(t, err)
 
 	// Different DB has different secret
@@ -140,7 +135,7 @@ func TestJWTServiceSecretPersistence(t *testing.T) {
 
 	svc1, err := auth.NewJWTService(db)
 	require.NoError(t, err)
-	token, err := svc1.GenerateToken(1, "testuser")
+	token, err := svc1.GenerateToken(1)
 	require.NoError(t, err)
 
 	svc2, err := auth.NewJWTService(db)

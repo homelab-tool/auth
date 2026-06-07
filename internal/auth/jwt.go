@@ -13,7 +13,6 @@ import (
 const jwtSecretName = "jwt_secret"
 
 type Claims struct {
-	ClientID string `json:"client_id"`
 	jwt.RegisteredClaims
 }
 
@@ -30,7 +29,7 @@ func NewJWTService(db *sql.DB) (*JWTService, error) {
 }
 
 func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (any, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -48,9 +47,8 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-func (s *JWTService) GenerateToken(userID int64, clientID string) (string, error) {
+func (s *JWTService) GenerateToken(userID int64) (string, error) {
 	claims := &Claims{
-		ClientID: clientID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   fmt.Sprintf("%d", userID),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

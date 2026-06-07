@@ -42,7 +42,7 @@ func setupTest(t *testing.T) (*echo.Echo, *auth.JWTService) {
 
 func TestForwardAuthValidToken(t *testing.T) {
 	srv, jwtSvc := setupTest(t)
-	token, err := jwtSvc.GenerateToken(1, "test-user")
+	token, err := jwtSvc.GenerateToken(1)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
@@ -56,7 +56,7 @@ func TestForwardAuthValidToken(t *testing.T) {
 
 func TestForwardAuthValidTokenCookie(t *testing.T) {
 	srv, jwtSvc := setupTest(t)
-	token, err := jwtSvc.GenerateToken(2, "cookie-user")
+	token, err := jwtSvc.GenerateToken(2)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
@@ -93,7 +93,7 @@ func TestForwardAuthInvalidToken(t *testing.T) {
 
 func TestForwardAuthBearerTakesPriority(t *testing.T) {
 	srv, jwtSvc := setupTest(t)
-	validToken, err := jwtSvc.GenerateToken(3, "header-user")
+	validToken, err := jwtSvc.GenerateToken(3)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
@@ -108,7 +108,7 @@ func TestForwardAuthBearerTakesPriority(t *testing.T) {
 
 func TestForwardAuthHostNotConfigured(t *testing.T) {
 	srv, jwtSvc := setupTest(t)
-	token, err := jwtSvc.GenerateToken(4, "test-user")
+	token, err := jwtSvc.GenerateToken(4)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)
@@ -122,7 +122,7 @@ func TestForwardAuthHostNotConfigured(t *testing.T) {
 
 func TestForwardAuthMissingHost(t *testing.T) {
 	srv, jwtSvc := setupTest(t)
-	token, err := jwtSvc.GenerateToken(5, "test-user")
+	token, err := jwtSvc.GenerateToken(5)
 	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodGet, "/caddy/forward_auth", nil)

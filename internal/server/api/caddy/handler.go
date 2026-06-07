@@ -50,7 +50,6 @@ func (h *Handler) forwardAuth(c *echo.Context) error {
 
 	log.Debug().
 		Str("user_id", claims.Subject).
-		Str("client_id", claims.ClientID).
 		Str("target_host", host).
 		Msg("forward_auth: authorized")
 

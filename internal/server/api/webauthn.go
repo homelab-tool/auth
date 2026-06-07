@@ -181,7 +181,7 @@ func (api *webauthnApi) registerFinish(c *echo.Context) error {
 
 	api.cache.Del(challenge)
 
-	token, err := api.jwtService.GenerateToken(ws.userID, "")
+	token, err := api.jwtService.GenerateToken(ws.userID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt")
 		return c.String(500, "server error")
@@ -257,7 +257,7 @@ func (api *webauthnApi) loginFinish(c *echo.Context) error {
 
 	webAuthnUser := resolvedUser.(*auth.WebAuthnUser)
 
-	token, err := api.jwtService.GenerateToken(webAuthnUser.ID, "")
+	token, err := api.jwtService.GenerateToken(webAuthnUser.ID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt")
 		return c.String(500, "server error")
