@@ -1,23 +1,19 @@
-GOTESTSUM = $(shell go env GOPATH)/bin/gotestsum
-
 test:
-	$(GOTESTSUM) -- -count=1 ./internal/... ./cmd/...
+	go tool gotestsum -- -count=1 ./internal/... ./cmd/...
 
 test-race:
-	$(GOTESTSUM) -- -race -count=1 ./internal/... ./cmd/...
+	go tool gotestsum -- -race -count=1 ./internal/... ./cmd/...
 
 test-verbose:
-	$(GOTESTSUM) --format standard-verbose -- -count=1 ./internal/... ./cmd/...
+	go tool gotestsum --format standard-verbose -- -count=1 ./internal/... ./cmd/...
 
 vet:
 	go vet ./...
 
-run:
-	$(MAKE) generate
+run: generate
 	go run ./cmd/auth/...
 
-build:
-	$(MAKE) generate
+build: generate
 	go build -o bin/auth ./cmd/auth/...
 
 e2e-build:
@@ -39,11 +35,5 @@ js-watch:
 	pnpm watch
 
 generate: templ-gen js-build
-
-dev:
-	$(MAKE) generate
-	go run ./cmd/auth/... &
-	pnpm watch &
-	wait
 
 .PHONY: test test-race test-verbose vet run build e2e e2e-ui e2e-build templ-gen js-build js-watch generate dev
