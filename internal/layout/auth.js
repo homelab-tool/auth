@@ -4,56 +4,66 @@ import { webauthnRegister, webauthnLogin } from "./webauthn.js";
 import { totpVerify, generateTOTPSecret, verifyTOTPSetup } from "./totp.js";
 import { setAuthCookie } from "./cookie.js";
 
-await opaque.ready;
+async function init() {
+    await opaque.ready;
 
-document.addEventListener("DOMContentLoaded", () => {
-    const loginForm = document.getElementById("login-form");
-    if (loginForm) {
-        loginForm.addEventListener("submit", handleLogin);
+    function registerHandlers() {
+        const loginForm = document.getElementById("login-form");
+        if (loginForm) {
+            loginForm.addEventListener("submit", handleLogin);
+        }
+
+        const passkeyBtn = document.getElementById("passkey-login");
+        if (passkeyBtn) {
+            passkeyBtn.addEventListener("click", handlePasskeyLogin);
+        }
+
+        const registerOpaqueForm = document.getElementById("register-opaque-form");
+        if (registerOpaqueForm) {
+            registerOpaqueForm.addEventListener("submit", handleRegisterOpaque);
+        }
+
+        const registerWebAuthnForm = document.getElementById("register-webauthn-form");
+        if (registerWebAuthnForm) {
+            registerWebAuthnForm.addEventListener("submit", handleRegisterWebAuthn);
+        }
+
+        const totpForm = document.getElementById("totp-form");
+        if (totpForm) {
+            totpForm.addEventListener("submit", handleTOTP);
+        }
+
+        const totpSetupBtn = document.getElementById("totp-setup");
+        if (totpSetupBtn) {
+            totpSetupBtn.addEventListener("click", handleTOTPSetup);
+        }
+
+        const totpVerifyForm = document.getElementById("totp-verify-form");
+        if (totpVerifyForm) {
+            totpVerifyForm.addEventListener("submit", handleTOTPVerifySetup);
+        }
+
+        const webauthnSetupBtn = document.getElementById("webauthn-setup");
+        if (webauthnSetupBtn) {
+            webauthnSetupBtn.addEventListener("click", handleWebAuthnSetup);
+        }
+
+        const skip2faBtn = document.getElementById("skip-2fa");
+        if (skip2faBtn) {
+            skip2faBtn.addEventListener("click", () => {
+                window.location.href = "/success";
+            });
+        }
     }
 
-    const passkeyBtn = document.getElementById("passkey-login");
-    if (passkeyBtn) {
-        passkeyBtn.addEventListener("click", handlePasskeyLogin);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", registerHandlers);
+    } else {
+        registerHandlers();
     }
+}
 
-    const registerOpaqueForm = document.getElementById("register-opaque-form");
-    if (registerOpaqueForm) {
-        registerOpaqueForm.addEventListener("submit", handleRegisterOpaque);
-    }
-
-    const registerWebAuthnForm = document.getElementById("register-webauthn-form");
-    if (registerWebAuthnForm) {
-        registerWebAuthnForm.addEventListener("submit", handleRegisterWebAuthn);
-    }
-
-    const totpForm = document.getElementById("totp-form");
-    if (totpForm) {
-        totpForm.addEventListener("submit", handleTOTP);
-    }
-
-    const totpSetupBtn = document.getElementById("totp-setup");
-    if (totpSetupBtn) {
-        totpSetupBtn.addEventListener("click", handleTOTPSetup);
-    }
-
-    const totpVerifyForm = document.getElementById("totp-verify-form");
-    if (totpVerifyForm) {
-        totpVerifyForm.addEventListener("submit", handleTOTPVerifySetup);
-    }
-
-    const webauthnSetupBtn = document.getElementById("webauthn-setup");
-    if (webauthnSetupBtn) {
-        webauthnSetupBtn.addEventListener("click", handleWebAuthnSetup);
-    }
-
-    const skip2faBtn = document.getElementById("skip-2fa");
-    if (skip2faBtn) {
-        skip2faBtn.addEventListener("click", () => {
-            window.location.href = "/success";
-        });
-    }
-});
+init();
 
 /** @param {string} msg */
 function showError(msg) {
@@ -117,7 +127,7 @@ async function handleWebAuthn2FA(sessionId) {
             showError(await res1.text());
             return;
         }
-        const credentialAssertion = await res1.json();
+        const { publicKey: credentialAssertion } = await res1.json();
 
         const credential = await navigator.credentials.get({ publicKey: credentialAssertion });
         if (!credential) return;
@@ -252,7 +262,7 @@ async function handleWebAuthnSetup() {
             showError(await res1.text());
             return;
         }
-        const credentialCreation = await res1.json();
+        const { publicKey: credentialCreation } = await res1.json();
 
         const credential = await navigator.credentials.create({ publicKey: credentialCreation });
         if (!credential) return;

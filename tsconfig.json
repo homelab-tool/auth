@@ -1,0 +1,15 @@
+{
+    "$schema": "https://www.schemastore.org/tsconfig.json",
+    "compilerOptions": {
+        "target": "esnext",
+        "lib": ["ESNext", "DOM"],
+        "module": "esnext",
+        "moduleResolution": "bundler",
+        "strict": true,
+        "noEmit": true,
+        "esModuleInterop": true,
+        "skipLibCheck": true,
+        "types": ["node"]
+    },
+    "include": ["playwright.config.ts", "test/e2e/**/*.ts"]
+}

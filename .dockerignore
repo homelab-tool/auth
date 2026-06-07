@@ -1,8 +1,15 @@
+*.md
+LICENSE
+
 .git/
 .gitignore
 .dockerignore
-node_modules/
-frontend/node_modules/
+
 Database.sqlite*
-*.md
-LICENSE
+node_modules
+bin/
+test-results/
+playwright-report/
+
+# not relevant
+test/

@@ -11,7 +11,7 @@ export async function webauthnRegister(displayName) {
         body: JSON.stringify({ displayName }),
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const credentialCreation = await res1.json();
+    const { publicKey: credentialCreation } = await res1.json();
 
     const credential = await navigator.credentials.create({
         publicKey: credentialCreation,
@@ -37,7 +37,7 @@ export async function webauthnLogin() {
         headers: { "Content-Type": "application/json" },
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const credentialAssertion = await res1.json();
+    const { publicKey: credentialAssertion } = await res1.json();
 
     const credential = await navigator.credentials.get({
         publicKey: credentialAssertion,
