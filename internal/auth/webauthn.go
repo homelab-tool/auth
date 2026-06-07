@@ -50,6 +50,9 @@ type WebAuthnUser struct {
 	Credentials []webauthn.Credential
 }
 
+// interface compile time check
+var _ webauthn.User = (*WebAuthnUser)(nil)
+
 func (u *WebAuthnUser) WebAuthnID() []byte {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], uint64(u.ID))
