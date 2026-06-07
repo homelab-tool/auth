@@ -1,9 +1,9 @@
 import { defineConfig } from "rolldown";
 
 export default defineConfig({
-    input: "internal/layout/auth.js",
+    input: "internal/server/pages/layout/auth.js",
     output: {
-        dir: "internal/static/dist",
+        dir: "internal/server/pages/static/dist",
         format: "esm",
     },
     resolve: {

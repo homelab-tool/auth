@@ -11,7 +11,7 @@ import (
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/require"
 
-	"github.com/homelab-tool/auth/internal/api"
+	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/testhelpers"

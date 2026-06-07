@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml rolldown.config.mjs ./
 RUN pnpm install
 
-COPY internal/layout/*.js internal/layout/
+COPY internal/server/pages/layout/*.js internal/server/pages/layout/
 RUN pnpm build
 
 FROM golang:1.26-alpine AS go-builder
@@ -17,7 +17,7 @@ RUN go mod download
 
 COPY . .
 RUN go tool templ generate
-COPY --from=js-builder /app/internal/static/dist internal/static/dist
+COPY --from=js-builder /app/internal/server/pages/static/dist internal/server/pages/static/dist
 RUN CGO_ENABLED=1 go build -o /app/auth ./cmd/auth/...
 
 FROM alpine:3.21

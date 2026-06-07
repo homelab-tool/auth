@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/homelab-tool/auth/internal/auth"
-	"github.com/homelab-tool/auth/internal/caddy"
+	"github.com/homelab-tool/auth/internal/server/api/caddy"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/testhelpers"
 )
