@@ -41,3 +41,8 @@ Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX fron
 - `WEBAUTHN_RPID` — e.g. `localhost`
 - `WEBAUTHN_RP_ORIGINS` — comma-separated, e.g. `http://localhost:1337`
 - `WEBAUTHN_RP_DISPLAY_NAME` — optional, defaults to `Homelab Auth`
+
+## Documentation
+
+- HTMX: https://raw.githubusercontent.com/bigskysoftware/htmx/refs/heads/master/www/content/docs.md
+- Templ: https://templ.guide/llms.md
