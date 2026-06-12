@@ -1,6 +1,5 @@
 import * as opaque from "@serenity-kit/opaque";
 import { setAuthCookie } from "../lib/cookie";
-import { base64URLToArrayBuffer } from "../lib/encoding";
 
 const baseUrl = "/api/opaque";
 
@@ -169,7 +168,7 @@ async function handleWebAuthn2FA(sessionId: string) {
     const credential = await navigator.credentials.get({
         publicKey: {
             ...publicKey,
-            challenge: base64URLToArrayBuffer(publicKey.challenge),
+            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
         },
     });
     if (!credential) return;
@@ -214,7 +213,7 @@ async function handlePasskeyLogin() {
     const credential = await navigator.credentials.get({
         publicKey: {
             ...publicKey,
-            challenge: base64URLToArrayBuffer(publicKey.challenge),
+            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
         },
     });
     if (!credential) throw new Error("passkey login cancelled");

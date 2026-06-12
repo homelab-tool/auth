@@ -1,6 +1,5 @@
 import * as opaque from "@serenity-kit/opaque";
 import { setAuthCookie } from "../lib/cookie";
-import { base64URLToArrayBuffer } from "../lib/encoding";
 
 const baseUrl = "/api/opaque";
 
@@ -143,8 +142,11 @@ async function handleRegisterWebAuthn(e: Event) {
     const credential = await navigator.credentials.create({
         publicKey: {
             ...publicKey,
-            challenge: base64URLToArrayBuffer(publicKey.challenge),
-            user: { ...publicKey.user, id: base64URLToArrayBuffer(publicKey.user.id) },
+            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
+            user: {
+                ...publicKey.user,
+                id: Uint8Array.fromBase64(publicKey.user.id, { alphabet: "base64url" }).buffer,
+            },
         },
     });
     if (!credential) throw new Error("passkey creation cancelled");
@@ -201,8 +203,11 @@ async function handleWebAuthnSetup() {
     const credential = await navigator.credentials.create({
         publicKey: {
             ...publicKey,
-            challenge: base64URLToArrayBuffer(publicKey.challenge),
-            user: { ...publicKey.user, id: base64URLToArrayBuffer(publicKey.user.id) },
+            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
+            user: {
+                ...publicKey.user,
+                id: Uint8Array.fromBase64(publicKey.user.id, { alphabet: "base64url" }).buffer,
+            },
         },
     });
     if (!credential) return;
