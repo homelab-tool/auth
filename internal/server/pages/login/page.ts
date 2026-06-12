@@ -1,5 +1,6 @@
 import * as opaque from "@serenity-kit/opaque";
 import { setAuthCookie } from "../lib/cookie";
+import { base64URLToArrayBuffer } from "../lib/encoding";
 
 const baseUrl = "/api/opaque";
 
@@ -149,6 +150,10 @@ function show2FASection(sessionId: string, methods: string[]) {
     section.style.display = "block";
 }
 
+type CredentialRequestOptionsJSON = Omit<PublicKeyCredentialRequestOptions, "challenge"> & {
+    challenge: string;
+};
+
 async function handleWebAuthn2FA(sessionId: string) {
     const res1 = await fetch("/api/opaque/login/2fa/webauthn/start", {
         method: "POST",
@@ -158,10 +163,14 @@ async function handleWebAuthn2FA(sessionId: string) {
     if (!res1.ok) {
         return;
     }
-    const { publicKey: credentialAssertion } = await res1.json();
+    const json: { publicKey: CredentialRequestOptionsJSON } = await res1.json();
+    const { publicKey } = json;
 
     const credential = await navigator.credentials.get({
-        publicKey: credentialAssertion,
+        publicKey: {
+            ...publicKey,
+            challenge: base64URLToArrayBuffer(publicKey.challenge),
+        },
     });
     if (!credential) return;
 
@@ -199,10 +208,14 @@ async function handlePasskeyLogin() {
         headers: { "Content-Type": "application/json" },
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const { publicKey: credentialAssertion } = await res1.json();
+    const json: { publicKey: CredentialRequestOptionsJSON } = await res1.json();
+    const { publicKey } = json;
 
     const credential = await navigator.credentials.get({
-        publicKey: credentialAssertion,
+        publicKey: {
+            ...publicKey,
+            challenge: base64URLToArrayBuffer(publicKey.challenge),
+        },
     });
     if (!credential) throw new Error("passkey login cancelled");
 

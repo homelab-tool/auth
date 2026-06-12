@@ -46,3 +46,13 @@ Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX fron
 
 - HTMX: https://raw.githubusercontent.com/bigskysoftware/htmx/refs/heads/master/www/content/docs.md
 - Templ: https://templ.guide/llms.md
+
+## Dependencies
+
+### Go
+
+Managed through `./go.mod`. To find the source files for them use `$(go env GOMODCACHE)` to find the directory.
+
+### JavaScript/TypeScript
+
+Found in `./node_modules/` managed through `./pnpm-workspace.yaml` and `./package.json`.

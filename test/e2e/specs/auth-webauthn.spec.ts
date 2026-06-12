@@ -1,8 +1,6 @@
 import { test, expect } from "../fixtures";
 
-test("register and login with passkey", async ({ page, e2e, context }) => {
-    await page.goto(`${e2e.authUrl}/register`);
-
+test("register, logout and login with passkey", async ({ page, e2e, context }) => {
     const cdp = await context.newCDPSession(page);
     await cdp.send("WebAuthn.enable");
     await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -15,18 +13,27 @@ test("register and login with passkey", async ({ page, e2e, context }) => {
         },
     });
 
-    await page.fill("#webauthn-displayName", "Passkey User");
-    await page.click("#register-webauthn-form button[type='submit']");
-    await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
-    await expect(page.locator("h1")).toHaveText("Profile");
+    await test.step("register", async () => {
+        await page.goto(`${e2e.authUrl}/register`);
 
-    const dds = page.locator("dd");
-    await expect(dds.nth(0)).toHaveText("Passkey User");
-    await expect(dds.nth(1)).toHaveText("Passkey");
+        await page.fill("#webauthn-displayName", "Passkey User");
+        await page.click("#register-webauthn-form button[type='submit']");
+        await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
 
-    await page.goto(`${e2e.authUrl}/login`);
+        await expect(page.locator("h1")).toHaveText("Profile");
+        const dds = page.locator("dd");
+        await expect(dds.nth(0)).toHaveText("Passkey User");
+        await expect(dds.nth(1)).toHaveText("Passkey");
+    });
 
-    await page.click("#passkey-login");
-    await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
-    await expect(page.locator("h1")).toHaveText("Profile");
+    await test.step("logout", async () => {
+        await page.click("button:has-text('Log Out')");
+        await expect(page).toHaveURL(`${e2e.authUrl}/login`);
+    });
+
+    await test.step("login", async () => {
+        await page.click("#passkey-login");
+        await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+        await expect(page.locator("h1")).toHaveText("Profile");
+    });
 });

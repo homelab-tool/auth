@@ -1,5 +1,6 @@
 import * as opaque from "@serenity-kit/opaque";
 import { setAuthCookie } from "../lib/cookie";
+import { base64URLToArrayBuffer } from "../lib/encoding";
 
 const baseUrl = "/api/opaque";
 
@@ -112,10 +113,18 @@ async function handleRegisterOpaque(e: Event) {
 
     if (password !== confirm) return;
 
-	const { token } = await opaqueRegister(clientId, password);
-	await setAuthCookie(token);
-	window.location.href = "/profile";
+    const { token } = await opaqueRegister(clientId, password);
+    await setAuthCookie(token);
+    window.location.href = "/profile";
 }
+
+type CredentialCreationOptionsJSON = Omit<
+    PublicKeyCredentialCreationOptions,
+    "challenge" | "user"
+> & {
+    challenge: string;
+    user: Omit<PublicKeyCredentialCreationOptions["user"], "id"> & { id: string };
+};
 
 async function handleRegisterWebAuthn(e: Event) {
     e.preventDefault();
@@ -128,10 +137,15 @@ async function handleRegisterWebAuthn(e: Event) {
         body: JSON.stringify({ displayName }),
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const { publicKey: credentialCreation } = await res1.json();
+    const json: { publicKey: CredentialCreationOptionsJSON } = await res1.json();
+    const { publicKey } = json;
 
     const credential = await navigator.credentials.create({
-        publicKey: credentialCreation,
+        publicKey: {
+            ...publicKey,
+            challenge: base64URLToArrayBuffer(publicKey.challenge),
+            user: { ...publicKey.user, id: base64URLToArrayBuffer(publicKey.user.id) },
+        },
     });
     if (!credential) throw new Error("passkey creation cancelled");
 
@@ -181,10 +195,15 @@ async function handleWebAuthnSetup() {
     if (!res1.ok) {
         throw new Error(await res1.text());
     }
-    const { publicKey: credentialCreation } = await res1.json();
+    const json: { publicKey: CredentialCreationOptionsJSON } = await res1.json();
+    const { publicKey } = json;
 
     const credential = await navigator.credentials.create({
-        publicKey: credentialCreation,
+        publicKey: {
+            ...publicKey,
+            challenge: base64URLToArrayBuffer(publicKey.challenge),
+            user: { ...publicKey.user, id: base64URLToArrayBuffer(publicKey.user.id) },
+        },
     });
     if (!credential) return;
 

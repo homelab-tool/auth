@@ -122,14 +122,15 @@ async function startContainers(testInfo: TestInfo) {
     const network = await new Network().start();
     sharedNetwork = network;
 
+    const hostPort = Math.floor(Math.random() * 30000) + 30000;
     const authLogs = logCollector();
     sharedAuth = await new GenericContainer("homelab-auth:e2e")
-        .withExposedPorts(1337)
+        .withExposedPorts({ host: hostPort, container: 1337 })
         .withNetwork(network)
         .withNetworkAliases("auth")
         .withEnvironment({
             WEBAUTHN_RPID: "localhost",
-            WEBAUTHN_RP_ORIGINS: "http://localhost:1337",
+            WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
         })
         .withLogConsumer(authLogs.consumer)
         .start();
@@ -197,10 +198,10 @@ export const test = base.extend<{
 
         const logs: string[] = [];
         page.on("console", (msg) => logs.push(`[${msg.type()}] ${msg.text()}`));
-        page.on("pageerror", (err) => logs.push(`[PAGE_ERROR] ${err.message}`));
+        page.on("pageerror", (err) => logs.push(`[PAGE_ERROR] ${err}`));
 
         await use({
-            authUrl: `http://127.0.0.1:${sharedAuth!.getMappedPort(1337)}`,
+            authUrl: `http://localhost:${sharedAuth!.getMappedPort(1337)}`,
             caddyUrl: `https://127.0.0.1:${sharedCaddy!.getMappedPort(443)}`,
         });
 
