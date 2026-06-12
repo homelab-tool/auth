@@ -5,7 +5,7 @@ WORKDIR /app
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml rolldown.config.mjs ./
 RUN pnpm install
 
-COPY internal/server/pages/layout/*.js internal/server/pages/layout/
+COPY internal/server/pages/ internal/server/pages/
 RUN pnpm build
 
 FROM golang:1.26-alpine AS go-builder
