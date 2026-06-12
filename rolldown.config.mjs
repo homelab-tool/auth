@@ -1,7 +1,10 @@
 import { defineConfig } from "rolldown";
 
 export default defineConfig({
-    input: "internal/server/pages/layout/auth.js",
+    input: {
+        "pages/login": "internal/server/pages/login/page.ts",
+        "pages/register": "internal/server/pages/register/page.ts",
+    },
     output: {
         dir: "internal/server/pages/static/dist",
         format: "esm",

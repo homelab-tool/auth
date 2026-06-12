@@ -82,6 +82,21 @@ function httpsGet(url: string, host?: string): Promise<{ ok: boolean }> {
     });
 }
 
+async function tryPing(url: string, opts?: { tls?: boolean; host?: string }): Promise<boolean> {
+    try {
+        if (opts?.tls) {
+            const resp = await httpsGet(url, opts?.host);
+            return resp.ok;
+        }
+        const resp = await fetch(url, {
+            headers: opts?.host ? { Host: opts.host } : undefined,
+        });
+        return resp.ok;
+    } catch {
+        return false;
+    }
+}
+
 async function waitForHealth(
     container: StartedTestContainer,
     port: number,
@@ -94,21 +109,9 @@ async function waitForHealth(
     const deadline = Date.now() + CONTAINER_STARTUP_MS;
 
     while (Date.now() < deadline) {
-        let ok = false;
-        try {
-            if (opts?.tls) {
-                const resp = await httpsGet(url, opts?.host);
-                ok = resp.ok;
-            } else {
-                const resp = await fetch(url, {
-                    headers: opts?.host ? { Host: opts.host } : undefined,
-                });
-                ok = resp.ok;
-            }
-        } catch {
-            /* retry */
-        }
-        if (ok) return;
+        // oxlint-disable-next-line no-await-in-loop
+        if (await tryPing(url, opts)) return;
+        // oxlint-disable-next-line no-await-in-loop
         await sleep(CONTAINER_POLL_INTERVAL_MS);
     }
 
@@ -199,7 +202,7 @@ export const test = base.extend<{
     },
     // oxlint-disable-next-line no-empty-pattern
     totp: async ({}, use) => {
-        use({ generate: (secret: string) => generateTOTP({ secret }) });
+        void use({ generate: (secret: string) => generateTOTP({ secret }) });
     },
 });
 

@@ -2,11 +2,20 @@ import * as opaque from "@serenity-kit/opaque";
 
 const baseUrl = "/api/opaque";
 
-/**
- * @param {string} clientId
- * @param {string} password
- */
-export async function opaqueRegister(clientId, password) {
+export interface OpaqueLoginToken {
+    kind: "token";
+    token: string;
+}
+
+export interface OpaqueLogin2FA {
+    kind: "2fa";
+    sessionId: string;
+    methods: string[];
+}
+
+export type OpaqueLoginResult = OpaqueLoginToken | OpaqueLogin2FA;
+
+export async function opaqueRegister(clientId: string, password: string): Promise<void> {
     const { clientRegistrationState, registrationRequest } = opaque.client.startRegistration({
         password,
     });
@@ -33,13 +42,10 @@ export async function opaqueRegister(clientId, password) {
     if (!res2.ok) throw new Error(await res2.text());
 }
 
-/**
- * @param {string} clientId
- * @param {string} password
- * @returns {Promise<{kind:"token", token:string}|{kind:"2fa", sessionId:string, methods:string[]}>}
- */
-export async function opaqueLogin(clientId, password) {
-    const { clientLoginState, startLoginRequest } = opaque.client.startLogin({ password });
+export async function opaqueLogin(clientId: string, password: string): Promise<OpaqueLoginResult> {
+    const { clientLoginState, startLoginRequest } = opaque.client.startLogin({
+        password,
+    });
 
     const res1 = await fetch(`${baseUrl}/login/start`, {
         method: "POST",
@@ -67,7 +73,13 @@ export async function opaqueLogin(clientId, password) {
     const data = await res2.json();
     if (data.token) return { kind: "token", token: data.token };
     if (data.status === "2fa_required") {
-        return { kind: "2fa", sessionId: data.session_id, methods: data.methods };
+        return {
+            kind: "2fa",
+            sessionId: data.session_id,
+            methods: data.methods,
+        };
     }
     throw new Error("unexpected response");
 }
+
+export const opaqueReady = opaque.ready;

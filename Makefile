@@ -28,12 +28,16 @@ e2e-ui: e2e-build
 templ-gen:
 	go tool templ generate
 
+copy-htmx:
+	cp node_modules/htmx.org/dist/htmx.min.js \
+		internal/server/pages/static/dist/htmx.min.js
+
 js-build:
 	pnpm build
 
 js-watch:
 	pnpm watch
 
-generate: templ-gen js-build
+generate: copy-htmx templ-gen js-build
 
-.PHONY: test test-race test-verbose vet run build e2e e2e-ui e2e-build templ-gen js-build js-watch generate dev
+.PHONY: test test-race test-verbose vet run build e2e e2e-ui e2e-build templ-gen copy-htmx js-build js-watch generate dev

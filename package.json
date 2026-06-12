@@ -9,11 +9,12 @@
         "build": "pnpm exec rolldown -c",
         "watch": "pnpm exec rolldown -c --watch",
         "lint": "pnpm exec oxlint .",
-        "typecheck": "tsc",
+        "typecheck": "pnpm exec tsc",
         "format": "pnpm exec oxfmt ."
     },
     "dependencies": {
-        "@serenity-kit/opaque": "catalog:"
+        "@serenity-kit/opaque": "catalog:",
+        "htmx.org": "catalog:"
     },
     "devDependencies": {
         "@playwright/test": "catalog:",
@@ -21,6 +22,7 @@
         "otplib": "catalog:",
         "oxfmt": "catalog:",
         "oxlint": "catalog:",
+        "oxlint-tsgolint": "catalog:",
         "rolldown": "catalog:",
         "testcontainers": "catalog:",
         "typescript": "catalog:"

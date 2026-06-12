@@ -9,16 +9,16 @@ templ Page() {
       <h2>Register with Password</h2>
       <form id="register-opaque-form">
         <div>
-          <label for="reg-clientId">Username</label>
-          <input type="text" id="reg-clientId" name="clientId" required autocomplete="username"/>
+          <label for="clientId">Username</label>
+          <input type="text" id="clientId" name="clientId" required autocomplete="username"/>
         </div>
         <div>
-          <label for="reg-password">Password</label>
-          <input type="password" id="reg-password" required autocomplete="new-password"/>
+          <label for="password">Password</label>
+          <input type="password" id="password" required autocomplete="new-password"/>
         </div>
         <div>
-          <label for="reg-confirm">Confirm Password</label>
-          <input type="password" id="reg-confirm" required autocomplete="new-password"/>
+          <label for="confirm">Confirm Password</label>
+          <input type="password" id="confirm" required autocomplete="new-password"/>
         </div>
         <button type="submit">Register with Password</button>
       </form>
@@ -32,29 +32,6 @@ templ Page() {
         <button type="submit">Register with Passkey</button>
       </form>
     </div>
-    <div id="error"></div>
-    <div id="response"></div>
-    <div id="2fa-setup-section" style="display:none">
-      <h2>Set Up Two-Factor Authentication</h2>
-      <div id="2fa-setup-methods">
-        <button id="totp-setup" type="button">Set Up Authenticator App</button>
-        <button id="webauthn-setup" type="button">Set Up Security Key</button>
-        <button id="skip-2fa" type="button">Skip</button>
-      </div>
-      <div id="totp-setup-detail" style="display:none">
-        <p>Scan this QR code with your authenticator app:</p>
-        <pre id="totp-secret"></pre>
-        <form id="totp-verify-form">
-          <div>
-            <label for="totp-setup-code">Enter the code from your authenticator app</label>
-            <input type="text" id="totp-setup-code" name="code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" required/>
-          </div>
-          <button type="submit">Verify</button>
-        </form>
-      </div>
-      <div id="webauthn-setup-detail" style="display:none">
-        <button id="register-webauthn-2fa" type="button">Register Security Key</button>
-      </div>
-    </div>
+    <script type="module" src="/static/pages/register.js"></script>
   }
 }
