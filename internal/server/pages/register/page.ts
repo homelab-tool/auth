@@ -69,7 +69,7 @@ async function init() {
         const skip2faBtn = document.getElementById("skip-2fa");
         if (skip2faBtn) {
             skip2faBtn.addEventListener("click", () => {
-                window.location.href = "/success";
+                window.location.href = "/profile";
             });
         }
     }
@@ -124,7 +124,7 @@ async function handleRegisterWebAuthn(e: Event) {
     if (!res2.ok) throw new Error(await res2.text());
     const data = await res2.json();
     await setAuthCookie(data.token);
-    window.location.href = "/success";
+    window.location.href = "/profile";
 }
 
 async function handleTOTPSetup() {
@@ -151,7 +151,7 @@ async function handleTOTPVerifySetup(e: Event) {
         body: JSON.stringify({ code }),
     });
     if (!res.ok) throw new Error(await res.text());
-    window.location.href = "/success";
+    window.location.href = "/profile";
 }
 
 async function handleWebAuthnSetup() {
@@ -178,5 +178,5 @@ async function handleWebAuthnSetup() {
         throw new Error(await res2.text());
     }
 
-    window.location.href = "/success";
+    window.location.href = "/profile";
 }

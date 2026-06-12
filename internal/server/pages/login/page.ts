@@ -84,7 +84,7 @@ async function init() {
         const skip2faBtn = document.getElementById("skip-2fa");
         if (skip2faBtn) {
             skip2faBtn.addEventListener("click", () => {
-                window.location.href = "/success";
+                window.location.href = "/profile";
             });
         }
     }
@@ -100,7 +100,7 @@ void init();
 
 async function afterLogin(token: string) {
     await setAuthCookie(token);
-    window.location.href = "/success";
+    window.location.href = "/profile";
 }
 
 async function handleLogin(e: Event) {

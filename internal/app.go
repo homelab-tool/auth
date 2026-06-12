@@ -10,9 +10,9 @@ import (
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 	"github.com/homelab-tool/auth/internal/server/pages/login"
+	"github.com/homelab-tool/auth/internal/server/pages/profile"
 	"github.com/homelab-tool/auth/internal/server/pages/register"
 	"github.com/homelab-tool/auth/internal/server/pages/static"
-	"github.com/homelab-tool/auth/internal/server/pages/success"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -106,7 +106,7 @@ func CreateApp() (*App, error) {
 
 	e.GET("/login", login.PageHandler)
 	e.GET("/register", register.PageHandler)
-	e.GET("/success", success.PageHandler(jwtService))
+	e.GET("/profile", profile.PageHandler(jwtService, userSvc))
 	e.POST("/auth/set-cookie", layout.SetCookieHandler(jwtService))
 	e.POST("/auth/logout", layout.LogoutHandler)
 

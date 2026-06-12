@@ -1,0 +1,34 @@
+package profile
+
+import (
+	"github.com/homelab-tool/auth/internal/service"
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+)
+
+func authMethodDisplay(method string) string {
+	switch method {
+	case "pass-opaque":
+		return "Password"
+	case "webauthn":
+		return "Passkey"
+	default:
+		return method
+	}
+}
+
+templ Page(user *service.User) {
+	@layout.Page("Profile") {
+		<h1>Profile</h1>
+		<dl>
+			<dt>Display Name</dt>
+			<dd>{ user.DisplayName }</dd>
+			<dt>Auth Method</dt>
+			<dd>{ authMethodDisplay(user.AuthMethod) }</dd>
+			<dt>Member Since</dt>
+			<dd>{ user.CreatedAt }</dd>
+		</dl>
+		<form action="/auth/logout" method="post">
+			<button type="submit">Log Out</button>
+		</form>
+	}
+}

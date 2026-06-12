@@ -11,6 +11,13 @@ import (
 	"github.com/homelab-tool/auth/internal/auth"
 )
 
+type User struct {
+	ID          int64
+	AuthMethod  string
+	DisplayName string
+	CreatedAt   string
+}
+
 type UserService struct {
 	db *sql.DB
 }
@@ -47,6 +54,17 @@ func (s *UserService) GetDisplayName(ctx context.Context, userID int64) (string,
 		return "", fmt.Errorf("failed to query display name: %w", err)
 	}
 	return displayName, nil
+}
+
+func (s *UserService) GetUser(ctx context.Context, userID int64) (*User, error) {
+	var u User
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, auth_method, display_name, created_at FROM users WHERE id = ?", userID).
+		Scan(&u.ID, &u.AuthMethod, &u.DisplayName, &u.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user: %w", err)
+	}
+	return &u, nil
 }
 
 func (s *UserService) LoadWebAuthnUser(ctx context.Context, userID int64) (*auth.WebAuthnUser, error) {

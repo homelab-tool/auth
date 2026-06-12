@@ -31,7 +31,7 @@ Go + JavaScript monorepo. Echo v5 HTTP server (SQLite-backed). templ + HTMX fron
 - **`internal/server/api/`** — HTTP handlers for `/api` routes
 - **`internal/server/api/caddy/`** — Caddy `forward_auth` endpoint
 - **`internal/server/pages/layout/`** — shared templ layout + JS bundle source (OPAQUE, WebAuthn, TOTP, cookie)
-- **`internal/server/pages/login/`**, **`internal/server/pages/register/`**, **`internal/server/pages/success/`** — page handlers (templ + Go)
+- **`internal/server/pages/`** — page handlers (templ + Go)
 - **`internal/server/pages/static/`** — embedded static assets (HTMX, bundled auth.js)
 - **`test/e2e/`** — Playwright E2E specs + fixtures + testcontainers orchestration
 - **`playwright.config.ts`** — Playwright config (chromium, TLS ignore, host resolver rules)

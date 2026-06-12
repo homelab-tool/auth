@@ -30,7 +30,7 @@ func SetCookieHandler(jwt *auth.JWTService) echo.HandlerFunc {
 			Expires:  claims.ExpiresAt.Time,
 		})
 
-		c.Response().Header().Set("HX-Redirect", "/success")
+		c.Response().Header().Set("HX-Redirect", "/profile")
 		return c.NoContent(200)
 	}
 }
