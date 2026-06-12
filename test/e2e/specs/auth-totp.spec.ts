@@ -2,9 +2,9 @@ import { test, expect } from "../fixtures";
 
 test("register with TOTP and login with 2FA", async ({ page, e2e, totp }) => {
     await page.goto(`${e2e.authUrl}/register`);
-    await page.fill("#reg-clientId", "totp-user");
-    await page.fill("#reg-password", "test-password");
-    await page.fill("#reg-confirm", "test-password");
+    await page.fill("#clientId", "totp-user");
+    await page.fill("#password", "test-password");
+    await page.fill("#confirm", "test-password");
     await page.click("#register-opaque-form button[type='submit']");
     await page.waitForSelector("[id='2fa-setup-section']", { state: "visible" });
 

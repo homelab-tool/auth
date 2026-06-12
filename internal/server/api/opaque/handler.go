@@ -199,7 +199,7 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 	encodedRecord := base64.RawURLEncoding.EncodeToString(recordBytes)
 	encodedCredentialId := base64.RawURLEncoding.EncodeToString(credentialId)
 
-	_, err = h.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord)
+	userId, err := h.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to create opaque user")
 		return c.String(500, "server error")
@@ -207,7 +207,13 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 
 	h.cache.Del(clientId)
 
-	return c.String(200, "registered!")
+	token, err := h.jwtService.GenerateToken(userId)
+	if err != nil {
+		log.Err(err).Int64("userId", userId).Msg("failed to generate jwt")
+		return c.String(500, "server error")
+	}
+
+	return c.JSON(200, map[string]string{"token": token})
 }
 
 func (h *Handler) loginStart(c *echo.Context) error {

@@ -50,7 +50,10 @@ func TestOpaqueFullFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
-	assert.Equal(t, "registered!", rec.Body.String())
+	var finishResp map[string]string
+	err = json.Unmarshal(rec.Body.Bytes(), &finishResp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, finishResp["token"])
 
 	// === DUPLICATE REGISTRATION ===
 

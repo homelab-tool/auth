@@ -190,15 +190,27 @@ export const test = base.extend<{
     e2e: E2EWorld;
     totp: { generate: (secret: string) => Promise<string> };
 }>({
-    // oxlint-disable-next-line no-empty-pattern
-    e2e: async ({}, use, testInfo) => {
+    e2e: async ({ page }, use, testInfo) => {
         if (!sharedNetwork) {
             await startContainers(testInfo);
         }
+
+        const logs: string[] = [];
+        page.on("console", (msg) => logs.push(`[${msg.type()}] ${msg.text()}`));
+        page.on("pageerror", (err) => logs.push(`[PAGE_ERROR] ${err.message}`));
+
         await use({
             authUrl: `http://127.0.0.1:${sharedAuth!.getMappedPort(1337)}`,
             caddyUrl: `https://127.0.0.1:${sharedCaddy!.getMappedPort(443)}`,
         });
+
+        if (logs.length > 0) {
+            testInfo.attachments.push({
+                name: "browser-console.txt",
+                contentType: "text/plain",
+                body: Buffer.from(logs.join("\n")),
+            });
+        }
     },
     // oxlint-disable-next-line no-empty-pattern
     totp: async ({}, use) => {

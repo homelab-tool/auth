@@ -1,5 +1,7 @@
-import { opaqueRegister, opaqueLogin, opaqueReady } from "../lib/opaque";
+import * as opaque from "@serenity-kit/opaque";
 import { setAuthCookie } from "../lib/cookie";
+
+const baseUrl = "/api/opaque";
 
 function getInput(id: string): HTMLInputElement {
     const el = document.getElementById(id);
@@ -7,8 +9,36 @@ function getInput(id: string): HTMLInputElement {
     return el;
 }
 
+async function opaqueRegister(clientId: string, password: string): Promise<{ token: string }> {
+    const { clientRegistrationState, registrationRequest } = opaque.client.startRegistration({
+        password,
+    });
+
+    const res1 = await fetch(`${baseUrl}/register/start`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, payload: registrationRequest }),
+    });
+    if (!res1.ok) throw new Error(await res1.text());
+    const registrationResponse = await res1.text();
+
+    const { registrationRecord } = opaque.client.finishRegistration({
+        clientRegistrationState,
+        password,
+        registrationResponse,
+    });
+
+    const res2 = await fetch(`${baseUrl}/register/finish`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId, payload: registrationRecord }),
+    });
+    if (!res2.ok) throw new Error(await res2.text());
+    return res2.json();
+}
+
 async function init() {
-    await opaqueReady;
+    await opaque.ready;
 
     function registerHandlers() {
         const opaqueForm = document.getElementById("register-opaque-form");
@@ -53,146 +83,100 @@ async function init() {
 
 void init();
 
-function showError(msg: string) {
-    const el = document.getElementById("error");
-    if (el) el.textContent = msg;
-}
-
 async function handleRegisterOpaque(e: Event) {
     e.preventDefault();
-    showError("");
 
     const clientId = getInput("clientId").value;
     const password = getInput("password").value;
     const confirm = getInput("confirm").value;
 
-    if (password !== confirm) {
-        showError("passwords do not match");
-        return;
-    }
+    if (password !== confirm) return;
 
-    try {
-        await opaqueRegister(clientId, password);
-        const result = await opaqueLogin(clientId, password);
-
-        if (result.kind === "token") {
-            await setAuthCookie(result.token);
-            const section = document.getElementById("2fa-setup-section");
-            if (section) section.style.display = "block";
-        } else {
-            const res = await fetch("/api/opaque/login/2fa/totp", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: result.sessionId, code: "" }),
-            });
-            if (!res.ok) throw new Error(await res.text());
-            const data = await res.json();
-            await setAuthCookie(data.token);
-            window.location.href = "/success";
-        }
-    } catch (err) {
-        showError(err instanceof Error ? err.message : "registration failed");
-    }
+    const { token } = await opaqueRegister(clientId, password);
+    await setAuthCookie(token);
+    const section = document.getElementById("2fa-setup-section");
+    if (section) section.style.display = "block";
 }
 
 async function handleRegisterWebAuthn(e: Event) {
     e.preventDefault();
-    showError("");
 
     const displayName = getInput("webauthn-displayName").value;
 
-    try {
-        const res1 = await fetch("/api/webauthn/register/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ displayName }),
-        });
-        if (!res1.ok) throw new Error(await res1.text());
-        const { publicKey: credentialCreation } = await res1.json();
+    const res1 = await fetch("/api/webauthn/register/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ displayName }),
+    });
+    if (!res1.ok) throw new Error(await res1.text());
+    const { publicKey: credentialCreation } = await res1.json();
 
-        const credential = await navigator.credentials.create({
-            publicKey: credentialCreation,
-        });
-        if (!credential) throw new Error("passkey creation cancelled");
+    const credential = await navigator.credentials.create({
+        publicKey: credentialCreation,
+    });
+    if (!credential) throw new Error("passkey creation cancelled");
 
-        const res2 = await fetch("/api/webauthn/register/finish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(credential),
-        });
-        if (!res2.ok) throw new Error(await res2.text());
-        const data = await res2.json();
-        await setAuthCookie(data.token);
-        window.location.href = "/success";
-    } catch (err) {
-        showError(err instanceof Error ? err.message : "passkey registration failed");
-    }
+    const res2 = await fetch("/api/webauthn/register/finish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credential),
+    });
+    if (!res2.ok) throw new Error(await res2.text());
+    const data = await res2.json();
+    await setAuthCookie(data.token);
+    window.location.href = "/success";
 }
 
 async function handleTOTPSetup() {
-    try {
-        const res = await fetch("/api/opaque/register/2fa/totp/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-        });
-        if (!res.ok) throw new Error(await res.text());
-        const result = await res.json();
+    const res = await fetch("/api/opaque/register/2fa/totp/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const result = await res.json();
 
-        const secretEl = document.getElementById("totp-secret");
-        const detailEl = document.getElementById("totp-setup-detail");
-        if (secretEl) secretEl.textContent = result.secret;
-        if (detailEl) detailEl.style.display = "block";
-    } catch (err) {
-        showError(err instanceof Error ? err.message : "failed to generate totp secret");
-    }
+    const secretEl = document.getElementById("totp-secret");
+    const detailEl = document.getElementById("totp-setup-detail");
+    if (secretEl) secretEl.textContent = result.secret;
+    if (detailEl) detailEl.style.display = "block";
 }
 
 async function handleTOTPVerifySetup(e: Event) {
     e.preventDefault();
     const code = getInput("totp-setup-code").value;
 
-    try {
-        const res = await fetch("/api/opaque/register/2fa/totp/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code }),
-        });
-        if (!res.ok) throw new Error(await res.text());
-        window.location.href = "/success";
-    } catch (err) {
-        showError(err instanceof Error ? err.message : "invalid code");
-    }
+    const res = await fetch("/api/opaque/register/2fa/totp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    window.location.href = "/success";
 }
 
 async function handleWebAuthnSetup() {
-    try {
-        const res1 = await fetch("/api/opaque/register/2fa/webauthn/start", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-        });
-        if (!res1.ok) {
-            showError(await res1.text());
-            return;
-        }
-        const { publicKey: credentialCreation } = await res1.json();
-
-        const credential = await navigator.credentials.create({
-            publicKey: credentialCreation,
-        });
-        if (!credential) return;
-
-        const res2 = await fetch("/api/opaque/register/2fa/webauthn/finish", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(credential),
-        });
-        if (!res2.ok) {
-            showError(await res2.text());
-            return;
-        }
-
-        window.location.href = "/success";
-    } catch (err) {
-        showError(err instanceof Error ? err.message : "failed to register security key");
+    const res1 = await fetch("/api/opaque/register/2fa/webauthn/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    });
+    if (!res1.ok) {
+        throw new Error(await res1.text());
     }
+    const { publicKey: credentialCreation } = await res1.json();
+
+    const credential = await navigator.credentials.create({
+        publicKey: credentialCreation,
+    });
+    if (!credential) return;
+
+    const res2 = await fetch("/api/opaque/register/2fa/webauthn/finish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credential),
+    });
+    if (!res2.ok) {
+        throw new Error(await res2.text());
+    }
+
+    window.location.href = "/success";
 }

@@ -7,6 +7,13 @@ export default defineConfig({
     timeout: TEST_TIMEOUT_MS,
     expect: { timeout: EXPECT_MS },
     use: {
+        trace: {
+            mode: "on",
+            attachments: true,
+            screenshots: true,
+            snapshots: true,
+            sources: true,
+        },
         navigationTimeout: NAVIGATION_MS,
         ignoreHTTPSErrors: true,
         launchOptions: {
