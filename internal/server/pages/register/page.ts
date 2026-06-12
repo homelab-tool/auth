@@ -27,11 +27,25 @@ async function opaqueRegister(clientId: string, password: string): Promise<{ tok
     // bytemare's ClientRecord). Both registration and login must use the same
     // identifier, otherwise the envelope HMAC check in ClientLogin::finish
     // (opaque-ke) will fail.
+    // Explicit argon2id parameters matching bytemare/ksf defaults
+    // (t_cost=3, m_cost=65536, parallelism=4). Both registration and login
+    // must use identical key stretching — the protocol derives the masking
+    // and envelope keys from KSF(password). A mismatch between the two
+    // callsites would produce different derived keys.
+    const keyStretching = {
+        "argon2id-custom": {
+            iterations: 3,
+            memory: 65536,
+            parallelism: 4,
+        },
+    } as const;
+
     const { registrationRecord } = opaque.client.finishRegistration({
         clientRegistrationState,
         password,
         registrationResponse,
         identifiers: { client: clientId },
+        keyStretching,
     });
 
     const res2 = await fetch(`${baseUrl}/register/finish`, {

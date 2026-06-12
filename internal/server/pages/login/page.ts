@@ -35,16 +35,25 @@ async function opaqueLogin(clientId: string, password: string): Promise<OpaqueLo
     if (!res1.ok) throw new Error(await res1.text());
     const loginResponse = await res1.text();
 
-    // Pass the same clientId as the client identifier used during registration
-    // (see register/page.ts). The Go bytemare server includes the client
-    // identity (ClientRecord.ClientIdentity) in the AKE transcript and
-    // envelope masking. Opaque-ke must receive the same identifier to match
-    // the server's computation, otherwise ClientLogin::finish returns None.
+    // Must use the same keyStretching and identifiers.client as registration
+    // (see register/page.ts). The Go server uses ClientRecord.ClientIdentity
+    // in the AKE transcript and envelope masking; opaque-ke's envelope HMAC
+    // check will fail if the identity passed to finishLogin doesn't match
+    // what was used during finishRegistration.
+    const keyStretching = {
+        "argon2id-custom": {
+            iterations: 3,
+            memory: 65536,
+            parallelism: 4,
+        },
+    } as const;
+
     const result = opaque.client.finishLogin({
         clientLoginState,
         password,
         loginResponse,
         identifiers: { client: clientId },
+        keyStretching,
     });
     if (!result) throw new Error("login failed");
 

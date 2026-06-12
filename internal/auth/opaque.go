@@ -9,6 +9,16 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// ServerConfig returns the OPAQUE configuration. The JS client
+// (@serenity-kit/opaque) must agree on:
+//
+//   - KSF: argon2id, t_cost=3, memory=65536, parallelism=4
+//     (pinned in JS as keyStretching: { "argon2id-custom": ... })
+//   - Client identity: the raw clientId string
+//     (pinned in JS as identifiers: { client: clientId })
+//
+// The bytemare/ksf Argon2id defaults match these values. If the defaults
+// change, update both this comment and the JS keyStretching values.
 func ServerConfig() *opaque.Configuration {
 	return &opaque.Configuration{
 		OPRF:    opaque.RistrettoSha512,
