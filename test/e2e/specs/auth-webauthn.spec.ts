@@ -17,14 +17,16 @@ test("register and login with passkey", async ({ page, e2e, context }) => {
 
     await page.fill("#webauthn-displayName", "Passkey User");
     await page.click("#register-webauthn-form button[type='submit']");
-    await expect(page).toHaveURL(`${e2e.authUrl}/success`);
+    await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+    await expect(page.locator("h1")).toHaveText("Profile");
 
-    await page.evaluate(() => {
-        document.cookie = "token=; Max-Age=0";
-    });
+    const dds = page.locator("dd");
+    await expect(dds.nth(0)).toHaveText("Passkey User");
+    await expect(dds.nth(1)).toHaveText("Passkey");
 
     await page.goto(`${e2e.authUrl}/login`);
 
     await page.click("#passkey-login");
-    await expect(page).toHaveURL(`${e2e.authUrl}/success`);
+    await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+    await expect(page.locator("h1")).toHaveText("Profile");
 });

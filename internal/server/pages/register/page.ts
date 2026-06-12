@@ -22,10 +22,16 @@ async function opaqueRegister(clientId: string, password: string): Promise<{ tok
     if (!res1.ok) throw new Error(await res1.text());
     const registrationResponse = await res1.text();
 
+    // Pass clientId as the client identifier so the envelope is sealed with
+    // an identity matching what the Go server uses (ClientIdentity field in
+    // bytemare's ClientRecord). Both registration and login must use the same
+    // identifier, otherwise the envelope HMAC check in ClientLogin::finish
+    // (opaque-ke) will fail.
     const { registrationRecord } = opaque.client.finishRegistration({
         clientRegistrationState,
         password,
         registrationResponse,
+        identifiers: { client: clientId },
     });
 
     const res2 = await fetch(`${baseUrl}/register/finish`, {
@@ -92,10 +98,9 @@ async function handleRegisterOpaque(e: Event) {
 
     if (password !== confirm) return;
 
-    const { token } = await opaqueRegister(clientId, password);
-    await setAuthCookie(token);
-    const section = document.getElementById("2fa-setup-section");
-    if (section) section.style.display = "block";
+	const { token } = await opaqueRegister(clientId, password);
+	await setAuthCookie(token);
+	window.location.href = "/profile";
 }
 
 async function handleRegisterWebAuthn(e: Event) {

@@ -45,6 +45,5 @@ func LogoutHandler(c *echo.Context) error {
 		MaxAge:   -1,
 	})
 
-	c.Response().Header().Set("HX-Redirect", "/login")
-	return c.NoContent(200)
+	return c.Redirect(302, "/login")
 }

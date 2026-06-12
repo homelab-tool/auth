@@ -7,9 +7,7 @@ test("Caddy forward_auth with Bearer token", async ({ page, e2e }) => {
     await page.fill("#password", "test-password");
     await page.fill("#confirm", "test-password");
     await page.click("#register-opaque-form button[type='submit']");
-    await page.waitForSelector("[id='2fa-setup-section']", { state: "visible" });
-    await page.click("#skip-2fa");
-    await expect(page).toHaveURL(`${e2e.authUrl}/success`);
+    await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
 
     const cookies = await page.context().cookies();
     const token = cookies.find((c) => c.name === "token")!.value;

@@ -35,10 +35,16 @@ async function opaqueLogin(clientId: string, password: string): Promise<OpaqueLo
     if (!res1.ok) throw new Error(await res1.text());
     const loginResponse = await res1.text();
 
+    // Pass the same clientId as the client identifier used during registration
+    // (see register/page.ts). The Go bytemare server includes the client
+    // identity (ClientRecord.ClientIdentity) in the AKE transcript and
+    // envelope masking. Opaque-ke must receive the same identifier to match
+    // the server's computation, otherwise ClientLogin::finish returns None.
     const result = opaque.client.finishLogin({
         clientLoginState,
         password,
         loginResponse,
+        identifiers: { client: clientId },
     });
     if (!result) throw new Error("login failed");
 

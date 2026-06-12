@@ -1,7 +1,7 @@
 import { test, expect } from "../fixtures";
 
-test("redirect to /login when accessing /success without cookie", async ({ page, e2e }) => {
-    await page.goto(`${e2e.authUrl}/success`);
+test("redirect to /login when accessing /profile without cookie", async ({ page, e2e }) => {
+    await page.goto(`${e2e.authUrl}/profile`);
     await expect(page).toHaveURL(`${e2e.authUrl}/login`);
 });
 
