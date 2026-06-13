@@ -75,11 +75,8 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 		return fmt.Errorf("failed to process opaque registration response: %w", err)
 	}
 
-	regRecord, _, err := client.RegistrationFinalize(regResp, []byte(username), nil, &opaque.ClientOptions{
-		KSFSalt:       make([]byte, 16),
-		KSFLength:     64,
-		KSFParameters: []uint64{3, 64 * 1024, 4},
-	})
+	ksf := auth.DefaultKSF()
+	regRecord, _, err := client.RegistrationFinalize(regResp, []byte(username), nil, ksf.ClientOptions())
 	if err != nil {
 		return fmt.Errorf("failed to finalize opaque registration: %w", err)
 	}
@@ -88,7 +85,9 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 	encodedCredentialID := base64.RawURLEncoding.EncodeToString(credentialID)
 
 	ctx := context.Background()
-	_, err = opaqueSvc.CreateUser(ctx, username, encodedCredentialID, encodedRecord)
+	ksfParams, _ := ksf.ParamsJSON()
+	_, err = opaqueSvc.CreateUser(ctx, username, encodedCredentialID, encodedRecord,
+		ksf.AlgorithmName(), ksf.Salt, ksfParams, ksf.OutputLen)
 	if err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
 	}

@@ -20,23 +20,32 @@ async function opaqueRegister(clientId: string, password: string): Promise<{ tok
         body: JSON.stringify({ clientId, payload: registrationRequest }),
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const registrationResponse = await res1.text();
+    const {
+        registrationResponse,
+        ksf,
+    }: {
+        registrationResponse: string;
+        ksf: { algorithm: string; salt: string; params: string; outputLen: number };
+    } = await res1.json();
 
-    // Pass clientId as the client identifier so the envelope is sealed with
-    // an identity matching what the Go server uses (ClientIdentity field in
-    // bytemare's ClientRecord). Both registration and login must use the same
-    // identifier, otherwise the envelope HMAC check in ClientLogin::finish
-    // (opaque-ke) will fail.
-    // Explicit argon2id parameters matching bytemare/ksf defaults
-    // (t_cost=3, m_cost=65536, parallelism=4). Both registration and login
-    // must use identical key stretching — the protocol derives the masking
-    // and envelope keys from KSF(password). A mismatch between the two
-    // callsites would produce different derived keys.
+    if (ksf.algorithm !== "argon2id")
+        throw new Error(`unsupported KSF algorithm: ${ksf.algorithm}`);
+    if (ksf.outputLen !== 64) throw new Error(`unsupported KSF output length: ${ksf.outputLen}`);
+
+    const parsed = JSON.parse(ksf.params);
+    if (
+        typeof parsed.iterations !== "number" ||
+        typeof parsed.memory !== "number" ||
+        typeof parsed.parallelism !== "number"
+    ) {
+        throw new Error("invalid KSF params");
+    }
+    const ksfParams: { iterations: number; memory: number; parallelism: number } = parsed;
     const keyStretching = {
         "argon2id-custom": {
-            iterations: 3,
-            memory: 65536,
-            parallelism: 4,
+            iterations: ksfParams.iterations,
+            memory: ksfParams.memory,
+            parallelism: ksfParams.parallelism,
         },
     } as const;
 

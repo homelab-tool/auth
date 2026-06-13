@@ -33,18 +33,31 @@ async function opaqueLogin(clientId: string, password: string): Promise<OpaqueLo
         body: JSON.stringify({ clientId, payload: startLoginRequest }),
     });
     if (!res1.ok) throw new Error(await res1.text());
-    const loginResponse = await res1.text();
+    const body: {
+        loginResponse: string;
+        ksf: { algorithm: string; salt: string; params: string; outputLen: number };
+    } = await res1.json();
+    const loginResponse = body.loginResponse;
+    const ksf = body.ksf;
 
-    // Must use the same keyStretching and identifiers.client as registration
-    // (see register/page.ts). The Go server uses ClientRecord.ClientIdentity
-    // in the AKE transcript and envelope masking; opaque-ke's envelope HMAC
-    // check will fail if the identity passed to finishLogin doesn't match
-    // what was used during finishRegistration.
+    if (ksf.algorithm !== "argon2id")
+        throw new Error(`unsupported KSF algorithm: ${ksf.algorithm}`);
+    if (ksf.outputLen !== 64) throw new Error(`unsupported KSF output length: ${ksf.outputLen}`);
+
+    const parsed = JSON.parse(ksf.params);
+    if (
+        typeof parsed.iterations !== "number" ||
+        typeof parsed.memory !== "number" ||
+        typeof parsed.parallelism !== "number"
+    ) {
+        throw new Error("invalid KSF params");
+    }
+    const ksfParams: { iterations: number; memory: number; parallelism: number } = parsed;
     const keyStretching = {
         "argon2id-custom": {
-            iterations: 3,
-            memory: 65536,
-            parallelism: 4,
+            iterations: ksfParams.iterations,
+            memory: ksfParams.memory,
+            parallelism: ksfParams.parallelism,
         },
     } as const;
 

@@ -29,20 +29,26 @@ type OpaqueUserData struct {
 	EncodedCredentialID string
 	EncodedRecord      string
 	UserID             int64
+	KSFAlgorithm       string
+	KSFSalt            []byte
+	KSFParams          string
+	KSFOutputLen       int
 }
 
 func (s *OpaqueService) GetUserData(ctx context.Context, clientID string) (*OpaqueUserData, error) {
 	var data OpaqueUserData
 	err := s.db.QueryRowContext(ctx,
-		"SELECT client_id, credential_id, registration_record, user_id FROM opaque_user_data WHERE client_id = ?", clientID).
-		Scan(&data.ClientID, &data.EncodedCredentialID, &data.EncodedRecord, &data.UserID)
+		"SELECT client_id, credential_id, registration_record, user_id, ksf_algorithm, ksf_salt, ksf_params, ksf_output_len FROM opaque_user_data WHERE client_id = ?", clientID).
+		Scan(&data.ClientID, &data.EncodedCredentialID, &data.EncodedRecord, &data.UserID,
+			&data.KSFAlgorithm, &data.KSFSalt, &data.KSFParams, &data.KSFOutputLen)
 	if err != nil {
 		return nil, err
 	}
 	return &data, nil
 }
 
-func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredentialID, encodedRecord string) (int64, error) {
+func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredentialID, encodedRecord string,
+	ksfAlgorithm string, ksfSalt []byte, ksfParams string, ksfOutputLen int) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to begin transaction: %w", err)
@@ -62,8 +68,9 @@ func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredent
 	}
 
 	_, err = tx.ExecContext(ctx,
-		"INSERT INTO opaque_user_data (client_id, credential_id, registration_record, user_id) VALUES (?, ?, ?, ?)",
-		clientID, encodedCredentialID, encodedRecord, userID)
+		"INSERT INTO opaque_user_data (client_id, credential_id, registration_record, user_id, ksf_algorithm, ksf_salt, ksf_params, ksf_output_len) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		clientID, encodedCredentialID, encodedRecord, userID,
+		ksfAlgorithm, ksfSalt, ksfParams, ksfOutputLen)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert opaque user data: %w", err)
 	}

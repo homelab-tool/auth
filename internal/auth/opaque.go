@@ -3,27 +3,68 @@ package auth
 import (
 	"crypto"
 	"database/sql"
+	"encoding/json"
 
 	"github.com/bytemare/ksf"
 	"github.com/bytemare/opaque"
 	"github.com/rs/zerolog/log"
 )
 
-// ServerConfig returns the OPAQUE configuration. The JS client
-// (@serenity-kit/opaque) must agree on:
-//
-//   - KSF: argon2id, t_cost=3, memory=65536, parallelism=4
-//     (pinned in JS as keyStretching: { "argon2id-custom": ... })
-//   - Client identity: the raw clientId string
-//     (pinned in JS as identifiers: { client: clientId })
-//
-// The bytemare/ksf Argon2id defaults match these values. If the defaults
-// change, update both this comment and the JS keyStretching values.
+type Argon2Params struct {
+	Iterations  uint32 `json:"iterations"`
+	Memory      uint32 `json:"memory"`
+	Parallelism uint8  `json:"parallelism"`
+}
+
+type KSFSettings struct {
+	Algorithm Argon2Params
+	Salt      []byte
+	OutputLen int
+}
+
+func (k *KSFSettings) AlgorithmName() string { return "argon2id" }
+
+func (k *KSFSettings) ParamsJSON() (string, error) {
+	b, err := json.Marshal(k.Algorithm)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func (k *KSFSettings) ClientOptions() *opaque.ClientOptions {
+	return &opaque.ClientOptions{
+		KSFSalt:       k.Salt,
+		KSFLength:     k.OutputLen,
+		KSFParameters: []uint64{uint64(k.Algorithm.Iterations), uint64(k.Algorithm.Memory), uint64(k.Algorithm.Parallelism)},
+	}
+}
+
+func (k *KSFSettings) Identifier() ksf.Identifier {
+	return ksf.Argon2id;
+}
+
+func DefaultKSF() *KSFSettings {
+	return &KSFSettings{
+		Algorithm: Argon2Params{
+			Iterations:  3,
+			Memory:      65536,
+			Parallelism: 4,
+		},
+		Salt:      make([]byte, 16),
+		OutputLen: 64,
+	}
+}
+
+// ServerConfig returns the OPAQUE configuration. Clients receive their KSF
+// settings from the server at registration time (see DefaultKSF), so the
+// configuration below just identifies the KSF algorithm — the actual
+// parameters go through ClientOptions in RegistrationFinalize/GenerateKE3.
 func ServerConfig() *opaque.Configuration {
 	return &opaque.Configuration{
 		OPRF:    opaque.RistrettoSha512,
 		AKE:     opaque.RistrettoSha512,
-		KSF:     ksf.Argon2id,
+		KSF:     DefaultKSF().Identifier(),
 		KDF:     crypto.SHA512,
 		MAC:     crypto.SHA512,
 		Hash:    crypto.SHA512,

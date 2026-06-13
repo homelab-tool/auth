@@ -88,12 +88,27 @@ func OpaqueRegister(t *testing.T, srv *echo.Echo, clientID, password string) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	regRespBytes, err := testhelpers.B64.DecodeString(rec.Body.String())
+	var startResp struct {
+		RegistrationResponse string `json:"registrationResponse"`
+		KSF                  struct {
+			Algorithm string `json:"algorithm"`
+			Params    string `json:"params"`
+			OutputLen int    `json:"outputLen"`
+		} `json:"ksf"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &startResp))
+	def := auth.DefaultKSF()
+	defParams, _ := def.ParamsJSON()
+	require.Equal(t, def.AlgorithmName(), startResp.KSF.Algorithm)
+	require.Equal(t, defParams, startResp.KSF.Params)
+	require.Equal(t, def.OutputLen, startResp.KSF.OutputLen)
+	regRespBytes, err := testhelpers.B64.DecodeString(startResp.RegistrationResponse)
 	require.NoError(t, err)
 	regResp, err := client.Deserialize.RegistrationResponse(regRespBytes)
 	require.NoError(t, err)
 
-	record, _, err := client.RegistrationFinalize(regResp, []byte(clientID), nil)
+	opts := auth.DefaultKSF().ClientOptions()
+	record, _, err := client.RegistrationFinalize(regResp, []byte(clientID), nil, opts)
 	require.NoError(t, err)
 
 	body = `{"clientId":"` + clientID + `","payload":"` + testhelpers.B64.EncodeToString(record.Serialize()) + `"}`
@@ -124,12 +139,27 @@ func OpaqueLoginRaw(t *testing.T, srv *echo.Echo, clientID string, password []by
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	ke2Bytes, err := testhelpers.B64.DecodeString(rec.Body.String())
+	var loginStartResp struct {
+		LoginResponse string `json:"loginResponse"`
+		KSF           struct {
+			Algorithm string `json:"algorithm"`
+			Params    string `json:"params"`
+			OutputLen int    `json:"outputLen"`
+		} `json:"ksf"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &loginStartResp))
+	def := auth.DefaultKSF()
+	defParams, _ := def.ParamsJSON()
+	require.Equal(t, def.AlgorithmName(), loginStartResp.KSF.Algorithm)
+	require.Equal(t, defParams, loginStartResp.KSF.Params)
+	require.Equal(t, def.OutputLen, loginStartResp.KSF.OutputLen)
+	ke2Bytes, err := testhelpers.B64.DecodeString(loginStartResp.LoginResponse)
 	require.NoError(t, err)
 	ke2, err := loginClient.Deserialize.KE2(ke2Bytes)
 	require.NoError(t, err)
 
-	ke3, _, _, err := loginClient.GenerateKE3(ke2, []byte(clientID), nil)
+	opts := auth.DefaultKSF().ClientOptions()
+	ke3, _, _, err := loginClient.GenerateKE3(ke2, []byte(clientID), nil, opts)
 	require.NoError(t, err)
 
 	body = `{"clientId":"` + clientID + `","payload":"` + testhelpers.B64.EncodeToString(ke3.Serialize()) + `"}`

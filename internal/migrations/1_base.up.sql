@@ -16,6 +16,10 @@ CREATE TABLE opaque_user_data (
   credential_id TEXT NOT NULL UNIQUE,
   registration_record TEXT NOT NULL,
   user_id INTEGER NOT NULL REFERENCES users(id),
+  ksf_algorithm TEXT NOT NULL,
+  ksf_salt BLOB NOT NULL,
+  ksf_params TEXT NOT NULL,
+  ksf_output_len INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 

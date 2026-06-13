@@ -10,9 +10,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/homelab-tool/auth/internal/auth"
 	apitest "github.com/homelab-tool/auth/internal/server/api/testutil"
 	"github.com/homelab-tool/auth/internal/testhelpers"
 )
+
+type loginStartResponse struct {
+	LoginResponse string `json:"loginResponse"`
+}
 
 func TestOpaqueFullFlow(t *testing.T) {
 	db := testhelpers.NewTestDB(t)
@@ -33,14 +38,18 @@ func TestOpaqueFullFlow(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	regRespBytes, err := testhelpers.B64.DecodeString(rec.Body.String())
+	var registerStartResp struct {
+		RegistrationResponse string `json:"registrationResponse"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &registerStartResp))
+	regRespBytes, err := testhelpers.B64.DecodeString(registerStartResp.RegistrationResponse)
 	require.NoError(t, err)
 	regResp, err := client.Deserialize.RegistrationResponse(regRespBytes)
 	require.NoError(t, err)
 
 	clientID := []byte(clientId)
 
-	record, exportKey, err := client.RegistrationFinalize(regResp, clientID, nil)
+	record, exportKey, err := client.RegistrationFinalize(regResp, clientID, nil, auth.DefaultKSF().ClientOptions())
 	require.NoError(t, err)
 	require.NotNil(t, exportKey)
 
@@ -91,8 +100,12 @@ func TestOpaqueLoginUnknownUser(t *testing.T) {
 	require.Equal(t, 200, rec.Code)
 	require.NotEmpty(t, rec.Body.String())
 
+	var loginResp loginStartResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &loginResp))
+	require.NotEmpty(t, loginResp.LoginResponse)
+
 	// loginFinish eventually rejects the fake session with 401
-	ke2Bytes, err := testhelpers.B64.DecodeString(rec.Body.String())
+	ke2Bytes, err := testhelpers.B64.DecodeString(loginResp.LoginResponse)
 	require.NoError(t, err)
 	ke2, err := loginClient.Deserialize.KE2(ke2Bytes)
 	require.NoError(t, err)
@@ -136,7 +149,9 @@ func TestOpaqueLoginWrongPassword(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	ke2Bytes, _ := testhelpers.B64.DecodeString(rec.Body.String())
+	var loginResp loginStartResponse
+	json.Unmarshal(rec.Body.Bytes(), &loginResp)
+	ke2Bytes, _ := testhelpers.B64.DecodeString(loginResp.LoginResponse)
 	ke2, err := wrongClient.Deserialize.KE2(ke2Bytes)
 	require.NoError(t, err)
 

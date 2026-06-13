@@ -22,6 +22,13 @@ import (
 const maxPayloadSize = 65536
 const maxClientIdLen = 256
 
+type cachedKSF struct {
+	algorithm string
+	salt      []byte
+	params    string
+	outputLen int
+}
+
 type LoginState struct {
 	serverOutput *opaque.ServerOutput
 	userId       int64
@@ -30,6 +37,7 @@ type LoginState struct {
 type Handler struct {
 	opaqueService *service.OpaqueService
 	cache         *ristretto.Cache[string, []byte]
+	ksfCache      *ristretto.Cache[string, *cachedKSF]
 	loginCache    *ristretto.Cache[string, *LoginState]
 	opaqueServer  *opaque.Server
 	fakeRecord    *opaque.ClientRecord
@@ -49,6 +57,11 @@ func NewHandler(opaqueServer *opaque.Server, opaqueService *service.OpaqueServic
 		return nil, fmt.Errorf("failed to create opaque cache: %w", err)
 	}
 
+	ksfCache, err := cacheutil.NewCache[*cachedKSF]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create opaque ksf cache: %w", err)
+	}
+
 	loginCache, err := cacheutil.NewCache[*LoginState]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create opaque login cache: %w", err)
@@ -57,6 +70,7 @@ func NewHandler(opaqueServer *opaque.Server, opaqueService *service.OpaqueServic
 	return &Handler{
 		opaqueService: opaqueService,
 		cache:         cache,
+		ksfCache:      ksfCache,
 		loginCache:    loginCache,
 		opaqueServer:  opaqueServer,
 		fakeRecord:    fakeRecord,
@@ -159,6 +173,21 @@ func (h *Handler) registerStart(c *echo.Context) error {
 	h.cache.SetWithTTL(clientId, credentialId, 1, time.Minute)
 	h.cache.Wait()
 
+	ksf := auth.DefaultKSF()
+	paramsJSON, err := ksf.ParamsJSON()
+	if err != nil {
+		log.Err(err).Msg("failed to marshal ksf params")
+		return c.String(500, "server error")
+	}
+
+	h.ksfCache.SetWithTTL(clientId, &cachedKSF{
+		algorithm: ksf.AlgorithmName(),
+		salt:      ksf.Salt,
+		params:    paramsJSON,
+		outputLen: ksf.OutputLen,
+	}, 1, time.Minute)
+	h.ksfCache.Wait()
+
 	registrationResponse, err := h.opaqueServer.RegistrationResponse(registrationRequest, credentialId, nil)
 	if err != nil {
 		log.Err(err).Msg("failed to generate registration response")
@@ -168,7 +197,15 @@ func (h *Handler) registerStart(c *echo.Context) error {
 	responseBytes := registrationResponse.Serialize()
 	encodedResponse := base64.RawURLEncoding.EncodeToString(responseBytes)
 
-	return c.String(200, encodedResponse)
+	return c.JSON(200, map[string]any{
+		"registrationResponse": encodedResponse,
+		"ksf": map[string]any{
+			"algorithm": ksf.AlgorithmName(),
+			"salt":      base64.StdEncoding.EncodeToString(ksf.Salt),
+			"params":    paramsJSON,
+			"outputLen": ksf.OutputLen,
+		},
+	})
 }
 
 func (h *Handler) registerFinish(c *echo.Context) error {
@@ -178,8 +215,13 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	credentialId, foundClientId := h.cache.Get(clientId)
-	if !foundClientId || credentialId == nil {
+	credentialId, found := h.cache.Get(clientId)
+	if !found || credentialId == nil {
+		return c.String(400, "invalid request")
+	}
+
+	ksfCached, found := h.ksfCache.Get(clientId)
+	if !found || ksfCached == nil {
 		return c.String(400, "invalid request")
 	}
 
@@ -193,13 +235,15 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 	encodedRecord := base64.RawURLEncoding.EncodeToString(recordBytes)
 	encodedCredentialId := base64.RawURLEncoding.EncodeToString(credentialId)
 
-	userId, err := h.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord)
+	userId, err := h.opaqueService.CreateUser(c.Request().Context(), clientId, encodedCredentialId, encodedRecord,
+		ksfCached.algorithm, ksfCached.salt, ksfCached.params, ksfCached.outputLen)
 	if err != nil {
 		log.Err(err).Str("clientId", clientId).Msg("failed to create opaque user")
 		return c.String(500, "server error")
 	}
 
 	h.cache.Del(clientId)
+	h.ksfCache.Del(clientId)
 
 	token, err := h.jwtService.GenerateToken(userId)
 	if err != nil {
@@ -238,7 +282,17 @@ func (h *Handler) loginStart(c *echo.Context) error {
 			ke2Bytes := ke2.Serialize()
 			encodedResponse := base64.RawURLEncoding.EncodeToString(ke2Bytes)
 
-			return c.String(200, encodedResponse)
+			def := auth.DefaultKSF()
+			defParams, _ := def.ParamsJSON()
+			return c.JSON(200, map[string]any{
+				"loginResponse": encodedResponse,
+				"ksf": map[string]any{
+					"algorithm": def.AlgorithmName(),
+					"salt":      base64.StdEncoding.EncodeToString(def.Salt),
+					"params":    defParams,
+					"outputLen": def.OutputLen,
+				},
+			})
 		}
 
 		log.Err(err).Str("clientId", clientId).Msg("failed to query opaque user data")
@@ -281,7 +335,15 @@ func (h *Handler) loginStart(c *echo.Context) error {
 	ke2Bytes := ke2.Serialize()
 	encodedResponse := base64.RawURLEncoding.EncodeToString(ke2Bytes)
 
-	return c.String(200, encodedResponse)
+	return c.JSON(200, map[string]any{
+		"loginResponse": encodedResponse,
+		"ksf": map[string]any{
+			"algorithm": data.KSFAlgorithm,
+			"salt":      base64.StdEncoding.EncodeToString(data.KSFSalt),
+			"params":    data.KSFParams,
+			"outputLen": data.KSFOutputLen,
+		},
+	})
 }
 
 func (h *Handler) loginFinish(c *echo.Context) error {
