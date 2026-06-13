@@ -1,7 +1,6 @@
 package profile
 
 import (
-	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 )
 
@@ -11,24 +10,58 @@ func authMethodDisplay(method string) string {
 		return "Password"
 	case "webauthn":
 		return "Passkey"
-	default:
-		return method
 	}
+	return method
 }
 
-templ Page(user *service.User) {
+templ Page(data *ProfileData) {
 	@layout.Page("Profile") {
 		<h1>Profile</h1>
 		<dl>
 			<dt>Display Name</dt>
-			<dd>{ user.DisplayName }</dd>
+			<dd>{ data.User.DisplayName }</dd>
 			<dt>Auth Method</dt>
-			<dd>{ authMethodDisplay(user.AuthMethod) }</dd>
+			<dd>{ authMethodDisplay(data.User.AuthMethod) }</dd>
 			<dt>Member Since</dt>
-			<dd>{ user.CreatedAt }</dd>
+			<dd>{ data.User.CreatedAt }</dd>
 		</dl>
+		<hr/>
+		<section id="profile-2fa">
+			<h2>Two-Factor Authentication</h2>
+			<dl>
+				<dt>Authenticator App (TOTP)</dt>
+				<dd>
+					if hasMethod(data.EnabledMethods, "totp") {
+						<span style="color: green;">&#10003; Enabled</span>
+						<button hx-delete="/api/opaque/register/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
+					} else {
+						<span>Not set up</span>
+						<a href="/register/2fa" role="button">Set up</a>
+					}
+				</dd>
+				<dt>Security Key (WebAuthn)</dt>
+				<dd>
+					if hasMethod(data.EnabledMethods, "webauthn") {
+						<span style="color: green;">&#10003; Enabled</span>
+						<button hx-delete="/api/opaque/register/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable WebAuthn 2FA?">Disable</button>
+					} else {
+						<span>Not set up</span>
+						<a href="/register/2fa" role="button">Set up</a>
+					}
+				</dd>
+			</dl>
+		</section>
 		<form action="/auth/logout" method="post">
 			<button type="submit">Log Out</button>
 		</form>
 	}
+}
+
+func hasMethod(methods []string, method string) bool {
+	for _, m := range methods {
+		if m == method {
+			return true
+		}
+	}
+	return false
 }

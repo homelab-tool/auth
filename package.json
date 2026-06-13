@@ -14,7 +14,8 @@
     },
     "dependencies": {
         "@serenity-kit/opaque": "catalog:",
-        "htmx.org": "catalog:"
+        "htmx.org": "catalog:",
+        "qr": "catalog:"
     },
     "devDependencies": {
         "@playwright/test": "catalog:",

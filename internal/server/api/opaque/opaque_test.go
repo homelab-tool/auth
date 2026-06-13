@@ -273,6 +273,10 @@ func (m *mockSecondFactor) Methods(_ int64) ([]string, error) {
 	return m.methods, nil
 }
 
+func (m *mockSecondFactor) Disable(_ int64, _ string) error {
+	return nil
+}
+
 func TestOpaqueLogin2FARequired(t *testing.T) {
 	db := testhelpers.NewTestDB(t)
 	svc := &mockSecondFactor{required: true, methods: []string{"webauthn"}}

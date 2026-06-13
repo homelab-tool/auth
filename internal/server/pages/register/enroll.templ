@@ -1,0 +1,62 @@
+package register
+
+templ EnrollmentPage() {
+	<h1>Set Up Two-Factor Authentication</h1>
+	<p>Add an extra layer of security to your account. You can set up one or both methods.</p>
+	<div id="enrollment-section">
+		<div id="totp-section">
+			<h2>Authenticator App (TOTP)</h2>
+			<p>Use an authenticator app like Google Authenticator, Authy, or 1Password.</p>
+			<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+				Set Up Authenticator App
+			</button>
+		</div>
+		<hr/>
+		<div id="webauthn-section">
+			<h2>Security Key (WebAuthn)</h2>
+			<p>Use a hardware security key or platform authenticator (e.g. Touch ID, Windows Hello).</p>
+			<button id="webauthn-2fa-setup" type="button">Set Up Security Key</button>
+			<div id="webauthn-2fa-status"></div>
+		</div>
+		<hr/>
+		<a href="/profile" role="button">Skip for now</a>
+	</div>
+	<script type="module" src="/static/pages/enroll.js"></script>
+}
+
+templ TOTPSetupForm(secret string, uri string) {
+	<div id="totp-section">
+		<h2>Authenticator App (TOTP)</h2>
+		<p>Scan this code or enter the secret manually in your authenticator app:</p>
+		<div id="totp-qr"></div>
+		<p><code>{ secret }</code></p>
+		<p><a id="totp-uri" href={ uri } target="_blank">{ uri }</a></p>
+		<form hx-post="/register/2fa/totp/verify" hx-target="#totp-section" hx-swap="outerHTML">
+			<div>
+				<label for="totp-code">Verification code</label>
+				<input type="text" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" required/>
+			</div>
+			<button type="submit">Verify</button>
+		</form>
+		<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+			Regenerate Secret
+		</button>
+	</div>
+}
+
+templ TOTPSuccess() {
+	<div id="totp-section">
+		<h2>Authenticator App (TOTP)</h2>
+		<p><strong>✓ Authenticator app set up successfully!</strong></p>
+	</div>
+}
+
+templ TOTPError(msg string) {
+	<div id="totp-section">
+		<h2>Authenticator App (TOTP)</h2>
+		<p style="color: red;">{ msg }</p>
+		<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+			Try Again
+		</button>
+	</div>
+}

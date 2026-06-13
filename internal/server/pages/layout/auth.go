@@ -1,6 +1,7 @@
 package layout
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/homelab-tool/auth/internal/auth"
@@ -33,6 +34,22 @@ func SetCookieHandler(jwt *auth.JWTService) echo.HandlerFunc {
 		c.Response().Header().Set("HX-Redirect", "/profile")
 		return c.NoContent(200)
 	}
+}
+
+func UserIDFromCookie(c *echo.Context, jwt *auth.JWTService) (int64, error) {
+	cookie, err := c.Cookie("token")
+	if err != nil || cookie.Value == "" {
+		return 0, echo.NewHTTPError(401, "unauthorized")
+	}
+	claims, err := jwt.ValidateToken(cookie.Value)
+	if err != nil {
+		return 0, echo.NewHTTPError(401, "unauthorized")
+	}
+	var userID int64
+	if _, err := fmt.Sscanf(claims.Subject, "%d", &userID); err != nil {
+		return 0, echo.NewHTTPError(500, "server error")
+	}
+	return userID, nil
 }
 
 func LogoutHandler(c *echo.Context) error {

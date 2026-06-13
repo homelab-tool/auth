@@ -115,7 +115,12 @@ func CreateApp() (*App, error) {
 
 	e.GET("/login", login.PageHandler)
 	e.GET("/register", register.PageHandler)
-	e.GET("/profile", profile.PageHandler(jwtService, userSvc))
+	e.GET("/profile", profile.PageHandler(jwtService, userSvc, secondFactorSvc))
+
+	enrollHandler := register.NewEnrollmentHandler(jwtService, userSvc, totpSvc)
+	e.GET("/register/2fa", enrollHandler.PageHandler)
+	e.POST("/register/2fa/totp/generate", enrollHandler.HandleTOTPGenerate)
+	e.POST("/register/2fa/totp/verify", enrollHandler.HandleTOTPVerify)
 	e.POST("/auth/set-cookie", layout.SetCookieHandler(jwtService))
 	e.POST("/auth/logout", layout.LogoutHandler)
 

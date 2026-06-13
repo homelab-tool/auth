@@ -106,6 +106,7 @@ func (h *Handler) SetupSubRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFun
 	reg.POST("/webauthn/finish", h.register2FAFinish)
 	reg.POST("/totp/generate", h.register2FATOTPGenerate)
 	reg.POST("/totp/verify", h.register2FATOTPVerify)
+	reg.DELETE("/:method", h.disable2FA)
 }
 
 func (h *Handler) login2FAStart(c *echo.Context) error {
@@ -420,6 +421,31 @@ func generateSessionID() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+func (h *Handler) disable2FA(c *echo.Context) error {
+	method := c.Param("method")
+	if method != "totp" && method != "webauthn" {
+		return c.String(400, "invalid method")
+	}
+
+	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := parseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	if err := h.secondFactorSvc.Disable(userID, method); err != nil {
+		log.Err(err).Int64("userID", userID).Str("method", method).Msg("failed to disable second factor")
+		return c.String(500, "server error")
+	}
+
+	return c.JSON(200, map[string]string{"status": "ok"})
 }
 
 func parseUserID(subject string) (int64, error) {

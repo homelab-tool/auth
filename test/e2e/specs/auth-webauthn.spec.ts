@@ -18,6 +18,9 @@ test("register, logout and login with passkey", async ({ page, e2e, context }) =
 
         await page.fill("#webauthn-displayName", "Passkey User");
         await page.click("#register-webauthn-form button[type='submit']");
+
+        await expect(page.locator("#enrollment-section")).toBeVisible();
+        await page.click("a:has-text('Skip for now')");
         await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
 
         await expect(page.locator("h1")).toHaveText("Profile");
