@@ -52,7 +52,7 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 	if password == "" {
 		pwd, err := generatePassword()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to generate admin password: %w", err)
 		}
 		password = pwd
 	}
@@ -75,7 +75,11 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 		return fmt.Errorf("failed to process opaque registration response: %w", err)
 	}
 
-	regRecord, _, err := client.RegistrationFinalize(regResp, []byte(username), nil)
+	regRecord, _, err := client.RegistrationFinalize(regResp, []byte(username), nil, &opaque.ClientOptions{
+		KSFSalt:       make([]byte, 16),
+		KSFLength:     64,
+		KSFParameters: []uint64{3, 64 * 1024, 4},
+	})
 	if err != nil {
 		return fmt.Errorf("failed to finalize opaque registration: %w", err)
 	}
