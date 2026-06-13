@@ -79,6 +79,15 @@ func CreateApp() (*App, error) {
 	totpSvc := service.NewTOTPService(db)
 	siteConfigSvc := service.NewSiteConfigService(db)
 
+	opaqueServer, err := auth.CreateOpaqueServer(db)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := BootstrapAdminUser(db, opaqueSvc, opaqueServer); err != nil {
+		return nil, err
+	}
+
 	api := api.Api{
 		DB:              db,
 		JWT:             jwtService,
@@ -91,7 +100,7 @@ func CreateApp() (*App, error) {
 		SiteConfigs:     siteConfigSvc,
 	}
 
-	if err = api.SetupRoutes(e.Group("/api")); err != nil {
+	if err = api.SetupRoutes(e.Group("/api"), opaqueServer); err != nil {
 		return nil, err
 	}
 

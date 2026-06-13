@@ -18,7 +18,9 @@ RUN go mod download
 COPY . .
 RUN go tool templ generate
 COPY --from=js-builder /app/internal/server/pages/static/dist internal/server/pages/static/dist
-RUN CGO_ENABLED=1 go build -o /app/auth ./cmd/auth/...
+
+ENV GOCACHE=/root/.cache/go-build
+RUN --mount=type=cache,target="/root/.cache/go-build" CGO_ENABLED=1 go build -o /app/auth ./cmd/auth/...
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates sqlite-libs

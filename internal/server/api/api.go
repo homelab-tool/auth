@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 
+	bytemareopaque "github.com/bytemare/opaque"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api/opaque"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
@@ -24,7 +25,7 @@ type Api struct {
 	SiteConfigs     *service.SiteConfigService
 }
 
-func (api *Api) SetupRoutes(e *echo.Group) error {
+func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server) error {
 	sfHandler, err := secondfactor.NewHandler(
 		api.Users, api.Credentials, api.JWT, api.WebAuthn,
 		api.SecondFactorSvc, api.TOTP,
@@ -34,7 +35,7 @@ func (api *Api) SetupRoutes(e *echo.Group) error {
 	}
 
 	opaqueHandler, err := opaque.NewHandler(
-		api.Opaque, api.JWT, api.DB, sfHandler,
+		opaqueServer, api.Opaque, api.JWT, sfHandler,
 	)
 	if err != nil {
 		return err

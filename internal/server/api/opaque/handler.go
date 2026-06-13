@@ -37,13 +37,7 @@ type Handler struct {
 	secondFactor  *secondfactor.Handler
 }
 
-func NewHandler(opaqueService *service.OpaqueService, jwtService *auth.JWTService, db *sql.DB, secondFactor *secondfactor.Handler) (*Handler, error) {
-	opaqueServer, err := auth.CreateOpaqueServer(db)
-	if err != nil {
-		log.Err(err).Msg("failed to setup opaque for server")
-		return nil, err
-	}
-
+func NewHandler(opaqueServer *opaque.Server, opaqueService *service.OpaqueService, jwtService *auth.JWTService, secondFactor *secondfactor.Handler) (*Handler, error) {
 	fakeRecord, err := auth.ServerConfig().GetFakeRecord([]byte("fake-client"))
 	if err != nil {
 		log.Err(err).Msg("failed to generate fake opaque record")

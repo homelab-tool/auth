@@ -40,11 +40,16 @@ const caddyfile = [
 export type E2EWorld = {
     authUrl: string;
     caddyUrl: string;
+    adminUsername: string;
+    adminPassword: string;
 };
 
 let sharedNetwork: StartedNetwork | null = null;
 let sharedAuth: StartedTestContainer | null = null;
 let sharedCaddy: StartedTestContainer | null = null;
+let adminCredentials: { username: string; password: string } | null = null;
+let authLogCollector: ReturnType<typeof logCollector> | null = null;
+let caddyLogCollector: ReturnType<typeof logCollector> | null = null;
 
 function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
@@ -118,12 +123,36 @@ async function waitForHealth(
     throw new Error(`URL ${url} not accessible after ${CONTAINER_STARTUP_MS}ms`);
 }
 
+const ESC = String.fromCharCode(27);
+const ansiRe = new RegExp(`${ESC}\\[[0-9;]*m`, "g");
+
+function stripAnsi(s: string): string {
+    return s.replace(ansiRe, "");
+}
+
+function extractAdminCredentials(logs: string): { username: string; password: string } {
+    const userMatch = logs.match(/username=(\S+)/);
+    const passMatch = logs.match(/password=(\S+)/);
+
+    if (!userMatch || !passMatch) {
+        throw new Error("admin credentials not found in container logs");
+    }
+
+    const username = stripAnsi(userMatch[1]?.trim() ?? "");
+    const password = stripAnsi(passMatch[1]?.trim() ?? "");
+    if (!username || !password) {
+        throw new Error("admin credentials not found in container logs");
+    }
+
+    return { username, password };
+}
+
 async function startContainers(testInfo: TestInfo) {
     const network = await new Network().start();
     sharedNetwork = network;
 
     const hostPort = Math.floor(Math.random() * 30000) + 30000;
-    const authLogs = logCollector();
+    authLogCollector = logCollector();
     sharedAuth = await new GenericContainer("homelab-auth:e2e")
         .withExposedPorts({ host: hostPort, container: 1337 })
         .withNetwork(network)
@@ -131,49 +160,28 @@ async function startContainers(testInfo: TestInfo) {
         .withEnvironment({
             WEBAUTHN_RPID: "localhost",
             WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
+            ADMIN_USERNAME: "admin",
         })
-        .withLogConsumer(authLogs.consumer)
+        .withLogConsumer(authLogCollector.consumer)
         .start();
 
-    try {
-        await waitForHealth(sharedAuth, 1337, "/health", testInfo);
-    } catch (err) {
-        const logs = authLogs.getLogs();
-        if (logs) {
-            testInfo.attachments.push({
-                name: "auth-container-logs",
-                contentType: "text/plain",
-                body: Buffer.from(logs),
-            });
-        }
-        throw err;
-    }
+    await waitForHealth(sharedAuth, 1337, "/health", testInfo);
 
-    const caddyLogs = logCollector();
+    adminCredentials = extractAdminCredentials(authLogCollector.getLogs());
+
+    caddyLogCollector = logCollector();
     sharedCaddy = await new GenericContainer("caddy:2-alpine")
         .withExposedPorts(443)
         .withNetwork(network)
         .withNetworkAliases("caddy")
         .withCopyContentToContainer([{ content: caddyfile, target: "/etc/caddy/Caddyfile" }])
-        .withLogConsumer(caddyLogs.consumer)
+        .withLogConsumer(caddyLogCollector.consumer)
         .start();
 
-    try {
-        await waitForHealth(sharedCaddy, 443, "/health", testInfo, {
-            tls: true,
-            host: "auth.mydomain.test",
-        });
-    } catch (err) {
-        const logs = caddyLogs.getLogs();
-        if (logs) {
-            testInfo.attachments.push({
-                name: "caddy-container-logs",
-                contentType: "text/plain",
-                body: Buffer.from(logs),
-            });
-        }
-        throw err;
-    }
+    await waitForHealth(sharedCaddy, 443, "/health", testInfo, {
+        tls: true,
+        host: "auth.mydomain.test",
+    });
 }
 
 async function stopContainers() {
@@ -203,6 +211,19 @@ export const test = base.extend<{
         await use({
             authUrl: `http://localhost:${sharedAuth!.getMappedPort(1337)}`,
             caddyUrl: `https://127.0.0.1:${sharedCaddy!.getMappedPort(443)}`,
+            adminUsername: adminCredentials!.username,
+            adminPassword: adminCredentials!.password,
+        });
+
+        testInfo.attachments.push({
+            name: "auth.log",
+            contentType: "text/plain",
+            body: Buffer.from(authLogCollector!.getLogs()),
+        });
+        testInfo.attachments.push({
+            name: "caddy.log",
+            contentType: "text/plain",
+            body: Buffer.from(caddyLogCollector!.getLogs()),
         });
 
         if (logs.length > 0) {
