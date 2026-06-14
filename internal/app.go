@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log/slog"
 
+	bytemareopaque "github.com/bytemare/opaque"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
@@ -24,6 +25,51 @@ import (
 type App struct {
 	Router *echo.Echo
 	DB     *sql.DB
+}
+
+type Services struct {
+	JWT           *auth.JWTService
+	WebAuthn      *auth.WebAuthnService
+	Users         *service.UserService
+	Opaque        *service.OpaqueService
+	Credentials   *service.CredentialService
+	SecondFactor  service.SecondFactorService
+	TOTP          *service.TOTPService
+	SiteConfigs   *service.SiteConfigService
+	OpaqueServer  *bytemareopaque.Server
+}
+
+func InitServices(db *sql.DB, secondFactorSvc service.SecondFactorService) (*Services, error) {
+	jwtService, err := auth.NewJWTService(db)
+	if err != nil {
+		return nil, err
+	}
+
+	webAuthnSvc, err := auth.NewWebAuthnService()
+	if err != nil {
+		return nil, err
+	}
+
+	if secondFactorSvc == nil {
+		secondFactorSvc = service.NewDefaultSecondFactorService(db)
+	}
+
+	opaqueServer, err := auth.CreateOpaqueServer(db)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Services{
+		JWT:          jwtService,
+		WebAuthn:     webAuthnSvc,
+		Users:        service.NewUserService(db),
+		Opaque:       service.NewOpaqueService(db),
+		Credentials:  service.NewCredentialService(db),
+		SecondFactor: secondFactorSvc,
+		TOTP:         service.NewTOTPService(db),
+		SiteConfigs:  service.NewSiteConfigService(db),
+		OpaqueServer: opaqueServer,
+	}, nil
 }
 
 func CreateApp() (*App, error) {
@@ -63,35 +109,18 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
-	jwtService, err := auth.NewJWTService(db)
+	svcs, err := InitServices(db, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	webAuthnSvc, err := auth.NewWebAuthnService()
-	if err != nil {
-		return nil, err
-	}
-
-	userSvc := service.NewUserService(db)
-	opaqueSvc := service.NewOpaqueService(db)
-	credentialSvc := service.NewCredentialService(db)
-	secondFactorSvc := service.NewDefaultSecondFactorService(db)
-	totpSvc := service.NewTOTPService(db)
-	siteConfigSvc := service.NewSiteConfigService(db)
-
-	opaqueServer, err := auth.CreateOpaqueServer(db)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := BootstrapAdminUser(db, opaqueSvc, opaqueServer); err != nil {
+	if err := BootstrapAdminUser(db, svcs.Opaque, svcs.OpaqueServer); err != nil {
 		return nil, err
 	}
 
 	sfHandler, err := secondfactor.NewHandler(
-		userSvc, credentialSvc, jwtService, webAuthnSvc,
-		secondFactorSvc, totpSvc,
+		svcs.Users, svcs.Credentials, svcs.JWT, svcs.WebAuthn,
+		svcs.SecondFactor, svcs.TOTP,
 	)
 	if err != nil {
 		return nil, err
@@ -99,21 +128,21 @@ func CreateApp() (*App, error) {
 
 	api := api.Api{
 		DB:              db,
-		JWT:             jwtService,
-		WebAuthn:        webAuthnSvc,
-		Users:           userSvc,
-		Opaque:          opaqueSvc,
-		Credentials:     credentialSvc,
-		SecondFactorSvc: secondFactorSvc,
-		TOTP:            totpSvc,
-		SiteConfigs:     siteConfigSvc,
+		JWT:             svcs.JWT,
+		WebAuthn:        svcs.WebAuthn,
+		Users:           svcs.Users,
+		Opaque:          svcs.Opaque,
+		Credentials:     svcs.Credentials,
+		SecondFactorSvc: svcs.SecondFactor,
+		TOTP:            svcs.TOTP,
+		SiteConfigs:     svcs.SiteConfigs,
 	}
 
-	if err = api.SetupRoutes(e.Group("/api"), opaqueServer, sfHandler); err != nil {
+	if err = api.SetupRoutes(e.Group("/api"), svcs.OpaqueServer, sfHandler); err != nil {
 		return nil, err
 	}
 
-	caddyHandler := caddy.NewHandler(jwtService, siteConfigSvc)
+	caddyHandler := caddy.NewHandler(svcs.JWT, svcs.SiteConfigs)
 	caddyHandler.SetupRoutes(e.Group("/caddy"))
 
 	subFS, err := fs.Sub(static.Files, "dist")
@@ -124,16 +153,16 @@ func CreateApp() (*App, error) {
 
 	e.GET("/login", login.PageHandler)
 	e.GET("/register", register.PageHandler)
-	e.GET("/profile", profile.PageHandler(jwtService, userSvc, secondFactorSvc))
+	e.GET("/profile", profile.PageHandler(svcs.JWT, svcs.Users, svcs.SecondFactor))
 
-	enrollHandler := register.NewEnrollmentHandler(jwtService, userSvc, totpSvc)
+	enrollHandler := register.NewEnrollmentHandler(svcs.JWT, svcs.Users, svcs.TOTP)
 	e.GET("/register/2fa", enrollHandler.PageHandler)
 	e.POST("/register/2fa/totp/generate", enrollHandler.HandleTOTPGenerate)
 	e.POST("/register/2fa/totp/verify", enrollHandler.HandleTOTPVerify)
-	e.POST("/auth/set-cookie", layout.SetCookieHandler(jwtService))
+	e.POST("/auth/set-cookie", layout.SetCookieHandler(svcs.JWT))
 	e.POST("/auth/logout", layout.LogoutHandler)
 
-	twoFAHandler := login.NewTwoFAHandler(sfHandler, jwtService)
+	twoFAHandler := login.NewTwoFAHandler(sfHandler, svcs.JWT)
 	e.GET("/login/2fa/init", twoFAHandler.Init2FA)
 	e.POST("/login/2fa/totp", twoFAHandler.VerifyTOTP)
 

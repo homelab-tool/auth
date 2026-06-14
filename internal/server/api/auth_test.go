@@ -26,7 +26,7 @@ func TestWhoamiSuccess(t *testing.T) {
 	var resp map[string]string
 	err := json.Unmarshal(rec.Body.Bytes(), &resp)
 	require.NoError(t, err)
-	assert.Equal(t, "1", resp["user_id"])
+	assert.Equal(t, "1", resp["userId"])
 }
 
 func TestWhoamiNoAuth(t *testing.T) {

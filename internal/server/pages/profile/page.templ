@@ -31,7 +31,7 @@ templ Page(data *ProfileData) {
 			<dl>
 				<dt>Authenticator App (TOTP)</dt>
 				<dd>
-					if hasMethod(data.EnabledMethods, "totp") {
+					if data.HasTOTP {
 						<span style="color: green;">&#10003; Enabled</span>
 						<button hx-delete="/api/opaque/register/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
 					} else {
@@ -41,7 +41,7 @@ templ Page(data *ProfileData) {
 				</dd>
 				<dt>Security Key (WebAuthn)</dt>
 				<dd>
-					if hasMethod(data.EnabledMethods, "webauthn") {
+					if data.HasWebAuthn {
 						<span style="color: green;">&#10003; Enabled</span>
 						<button hx-delete="/api/opaque/register/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable WebAuthn 2FA?">Disable</button>
 					} else {
@@ -57,11 +57,4 @@ templ Page(data *ProfileData) {
 	}
 }
 
-func hasMethod(methods []string, method string) bool {
-	for _, m := range methods {
-		if m == method {
-			return true
-		}
-	}
-	return false
-}
+

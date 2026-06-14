@@ -38,6 +38,6 @@ js-build:
 js-watch:
 	pnpm watch
 
-generate: copy-htmx templ-gen js-build
+generate: templ-gen js-build copy-htmx
 
 .PHONY: test test-race test-verbose vet run build e2e e2e-ui e2e-build templ-gen copy-htmx js-build js-watch generate dev

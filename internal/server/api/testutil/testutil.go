@@ -2,12 +2,15 @@ package testutil
 
 import (
 	"database/sql"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/homelab-tool/auth/internal"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
@@ -43,32 +46,20 @@ func NewTestServer(t *testing.T, db *sql.DB, opts *NewTestServerOpts) *echo.Echo
 	t.Setenv("WEBAUTHN_RPID", rpID)
 	t.Setenv("WEBAUTHN_RP_ORIGINS", rpOrigins)
 
-	jwtService, err := auth.NewJWTService(db)
-	require.NoError(t, err)
-
-	webAuthnSvc, err := auth.NewWebAuthnService()
-	require.NoError(t, err)
-
-	userSvc := service.NewUserService(db)
-	opaqueSvc := service.NewOpaqueService(db)
-	credentialSvc := service.NewCredentialService(db)
-	totpSvc := service.NewTOTPService(db)
-	siteConfigSvc := service.NewSiteConfigService(db)
-
-	opaqueServer, err := auth.CreateOpaqueServer(db)
+	svcs, err := internal.InitServices(db, secondFactorSvc)
 	require.NoError(t, err)
 
 	e := echo.New()
 	a := &api.Api{
 		DB:              db,
-		JWT:             jwtService,
-		WebAuthn:        webAuthnSvc,
-		Users:           userSvc,
-		Opaque:          opaqueSvc,
-		Credentials:     credentialSvc,
-		SecondFactorSvc: secondFactorSvc,
-		TOTP:            totpSvc,
-		SiteConfigs:     siteConfigSvc,
+		JWT:             svcs.JWT,
+		WebAuthn:        svcs.WebAuthn,
+		Users:           svcs.Users,
+		Opaque:          svcs.Opaque,
+		Credentials:     svcs.Credentials,
+		SecondFactorSvc: svcs.SecondFactor,
+		TOTP:            svcs.TOTP,
+		SiteConfigs:     svcs.SiteConfigs,
 	}
 	sfHandler, err := secondfactor.NewHandler(
 		a.Users, a.Credentials, a.JWT, a.WebAuthn,
@@ -76,7 +67,7 @@ func NewTestServer(t *testing.T, db *sql.DB, opts *NewTestServerOpts) *echo.Echo
 	)
 	require.NoError(t, err)
 
-	err = a.SetupRoutes(e.Group("/api"), opaqueServer, sfHandler)
+	err = a.SetupRoutes(e.Group("/api"), svcs.OpaqueServer, sfHandler)
 	require.NoError(t, err)
 	return e
 }
@@ -177,6 +168,34 @@ func OpaqueLoginRaw(t *testing.T, srv *echo.Echo, clientID string, password []by
 	require.Equal(t, 200, rec.Code)
 
 	return rec
+}
+
+func ExtractPublicKey(t *testing.T, response string) string {
+	t.Helper()
+	var wrapped map[string]json.RawMessage
+	err := json.Unmarshal([]byte(response), &wrapped)
+	require.NoError(t, err)
+	pk, ok := wrapped["publicKey"]
+	require.True(t, ok, "response should contain publicKey field")
+	return string(pk)
+}
+
+func AddUserHandle(t *testing.T, assertionResponse string, userID int64) string {
+	t.Helper()
+	var resp map[string]any
+	err := json.Unmarshal([]byte(assertionResponse), &resp)
+	require.NoError(t, err)
+
+	response, ok := resp["response"].(map[string]any)
+	require.True(t, ok)
+
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], uint64(userID))
+	response["userHandle"] = base64.RawURLEncoding.EncodeToString(buf[:])
+
+	patched, err := json.Marshal(resp)
+	require.NoError(t, err)
+	return string(patched)
 }
 
 func OpaqueLogin(t *testing.T, srv *echo.Echo, clientID string, password []byte) string {

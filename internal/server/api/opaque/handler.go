@@ -142,7 +142,7 @@ func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) 
 	e.POST("/login/finish", h.loginFinish)
 
 	if h.secondFactor != nil {
-		h.secondFactor.SetupSubRoutes(e, jwtMiddleware)
+		h.secondFactor.SetupRoutes(e, jwtMiddleware)
 	}
 }
 

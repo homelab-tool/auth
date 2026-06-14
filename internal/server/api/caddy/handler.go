@@ -2,6 +2,7 @@ package caddy
 
 import (
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
@@ -21,7 +22,7 @@ func (h *Handler) SetupRoutes(g *echo.Group) {
 }
 
 func (h *Handler) forwardAuth(c *echo.Context) error {
-	token := extractToken(c)
+	token := api.ExtractJWT(c)
 	if token == "" {
 		return c.String(401, "unauthorized")
 	}
@@ -56,16 +57,4 @@ func (h *Handler) forwardAuth(c *echo.Context) error {
 	return c.NoContent(200)
 }
 
-func extractToken(c *echo.Context) string {
-	const bearerLen = len("Bearer ")
-	authHeader := c.Request().Header.Get("Authorization")
-	if len(authHeader) > bearerLen && authHeader[:bearerLen] == "Bearer " {
-		return authHeader[bearerLen:]
-	}
 
-	if cookie, err := c.Cookie("token"); err == nil && cookie.Value != "" {
-		return cookie.Value
-	}
-
-	return ""
-}

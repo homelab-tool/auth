@@ -10,7 +10,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func ParseUserID(subject string) (int64, error) {
+	var userID int64
+	_, err := fmt.Sscanf(subject, "%d", &userID)
+	return userID, err
+}
+
 const jwtSecretName = "jwt_secret"
+
+const ContextKeyClaims = "claims"
 
 type Claims struct {
 	jwt.RegisteredClaims

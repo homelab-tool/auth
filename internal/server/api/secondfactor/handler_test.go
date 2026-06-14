@@ -1,8 +1,6 @@
 package secondfactor_test
 
 import (
-	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,34 +15,6 @@ import (
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/testhelpers"
 )
-
-func extractPublicKey(t *testing.T, response string) string {
-	t.Helper()
-	var wrapped map[string]json.RawMessage
-	err := json.Unmarshal([]byte(response), &wrapped)
-	require.NoError(t, err)
-	pk, ok := wrapped["publicKey"]
-	require.True(t, ok, "response should contain publicKey field")
-	return string(pk)
-}
-
-func addUserHandle(t *testing.T, assertionResponse string, userID int64) string {
-	t.Helper()
-	var resp map[string]any
-	err := json.Unmarshal([]byte(assertionResponse), &resp)
-	require.NoError(t, err)
-
-	response, ok := resp["response"].(map[string]any)
-	require.True(t, ok)
-
-	var buf [8]byte
-	binary.BigEndian.PutUint64(buf[:], uint64(userID))
-	response["userHandle"] = base64.RawURLEncoding.EncodeToString(buf[:])
-
-	patched, err := json.Marshal(resp)
-	require.NoError(t, err)
-	return string(patched)
-}
 
 func TestSecondFactorRegisterFullFlow(t *testing.T) {
 	db := testhelpers.NewTestDB(t)
@@ -72,7 +42,7 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	pk := extractPublicKey(t, rec.Body.String())
+	pk := apitest.ExtractPublicKey(t, rec.Body.String())
 	attestationOptions, err := virtualwebauthn.ParseAttestationOptions(pk)
 	require.NoError(t, err)
 
@@ -128,7 +98,7 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	pk := extractPublicKey(t, rec.Body.String())
+	pk := apitest.ExtractPublicKey(t, rec.Body.String())
 	attestationOptions, err := virtualwebauthn.ParseAttestationOptions(pk)
 	require.NoError(t, err)
 
@@ -161,12 +131,12 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	srv.ServeHTTP(rec, req)
 	require.Equal(t, 200, rec.Code)
 
-	pk = extractPublicKey(t, rec.Body.String())
+	pk = apitest.ExtractPublicKey(t, rec.Body.String())
 	assertionOptions, err := virtualwebauthn.ParseAssertionOptions(pk)
 	require.NoError(t, err)
 
 	assertionResponse := virtualwebauthn.CreateAssertionResponse(rp, authenticator, cred, *assertionOptions)
-	assertionResponse = addUserHandle(t, assertionResponse, 1)
+	assertionResponse = apitest.AddUserHandle(t, assertionResponse, 1)
 
 	body = `{` + assertionResponse[1:]
 	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/finish?sessionId="+sessionID, strings.NewReader(body))

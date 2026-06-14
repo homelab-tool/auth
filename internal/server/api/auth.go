@@ -6,12 +6,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const contextKeyClaims = "claims"
-
 func jwtMiddleware(jwtService *auth.JWTService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c *echo.Context) error {
-			token := extractJWT(c)
+			token := ExtractJWT(c)
 			if token == "" {
 				return c.String(401, "unauthorized")
 			}
@@ -22,13 +20,13 @@ func jwtMiddleware(jwtService *auth.JWTService) echo.MiddlewareFunc {
 				return c.String(401, "unauthorized")
 			}
 
-			c.Set(contextKeyClaims, claims)
+			c.Set(auth.ContextKeyClaims, claims)
 			return next(c)
 		}
 	}
 }
 
-func extractJWT(c *echo.Context) string {
+func ExtractJWT(c *echo.Context) string {
 	const bearerLen = len("Bearer ")
 	authHeader := c.Request().Header.Get("Authorization")
 	if len(authHeader) > bearerLen && authHeader[:bearerLen] == "Bearer " {
@@ -43,9 +41,9 @@ func extractJWT(c *echo.Context) string {
 }
 
 func (api *Api) whoami(c *echo.Context) error {
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
-	return c.JSON(200, map[string]string{"user_id": claims.Subject})
+	return c.JSON(200, map[string]string{"userId": claims.Subject})
 }

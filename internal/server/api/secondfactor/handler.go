@@ -20,7 +20,6 @@ import (
 )
 
 const maxBodySize = 1 << 20
-const contextKeyClaims = "claims"
 
 type Pending2FAState struct {
 	userID int64
@@ -95,7 +94,7 @@ func (h *Handler) CheckPending(userID int64) (*Result, error) {
 	}, nil
 }
 
-func (h *Handler) SetupSubRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
+func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
 	e.POST("/login/2fa/webauthn/start", h.login2FAStart)
 	e.POST("/login/2fa/webauthn/finish", h.login2FAFinish)
 	e.POST("/login/2fa/totp", h.login2FATOTP)
@@ -205,12 +204,12 @@ func (h *Handler) login2FAFinish(c *echo.Context) error {
 }
 
 func (h *Handler) register2FAStart(c *echo.Context) error {
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
 
-	userID, err := parseUserID(claims.Subject)
+	userID, err := auth.ParseUserID(claims.Subject)
 	if err != nil {
 		log.Err(err).Msg("failed to parse user id from claims")
 		return c.String(500, "server error")
@@ -243,12 +242,12 @@ func (h *Handler) register2FAStart(c *echo.Context) error {
 }
 
 func (h *Handler) register2FAFinish(c *echo.Context) error {
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
 
-	userID, err := parseUserID(claims.Subject)
+	userID, err := auth.ParseUserID(claims.Subject)
 	if err != nil {
 		log.Err(err).Msg("failed to parse user id from claims")
 		return c.String(500, "server error")
@@ -371,12 +370,12 @@ func (h *Handler) ValidatePendingTOTP(ctx context.Context, sessionID, code strin
 }
 
 func (h *Handler) register2FATOTPGenerate(c *echo.Context) error {
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
 
-	userID, err := parseUserID(claims.Subject)
+	userID, err := auth.ParseUserID(claims.Subject)
 	if err != nil {
 		log.Err(err).Msg("failed to parse user id from claims")
 		return c.String(500, "server error")
@@ -398,12 +397,12 @@ func (h *Handler) register2FATOTPGenerate(c *echo.Context) error {
 }
 
 func (h *Handler) register2FATOTPVerify(c *echo.Context) error {
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
 
-	userID, err := parseUserID(claims.Subject)
+	userID, err := auth.ParseUserID(claims.Subject)
 	if err != nil {
 		log.Err(err).Msg("failed to parse user id from claims")
 		return c.String(500, "server error")
@@ -446,12 +445,12 @@ func (h *Handler) disable2FA(c *echo.Context) error {
 		return c.String(400, "invalid method")
 	}
 
-	claims, ok := c.Get(contextKeyClaims).(*auth.Claims)
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
 	if !ok {
 		return c.String(401, "unauthorized")
 	}
 
-	userID, err := parseUserID(claims.Subject)
+	userID, err := auth.ParseUserID(claims.Subject)
 	if err != nil {
 		log.Err(err).Msg("failed to parse user id from claims")
 		return c.String(500, "server error")
@@ -465,8 +464,4 @@ func (h *Handler) disable2FA(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"status": "ok"})
 }
 
-func parseUserID(subject string) (int64, error) {
-	var userID int64
-	_, err := fmt.Sscanf(subject, "%d", &userID)
-	return userID, err
-}
+

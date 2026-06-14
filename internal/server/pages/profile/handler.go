@@ -9,8 +9,9 @@ import (
 )
 
 type ProfileData struct {
-	User           *service.User
-	EnabledMethods []string
+	User      *service.User
+	HasTOTP   bool
+	HasWebAuthn bool
 }
 
 func PageHandler(jwt *auth.JWTService, users *service.UserService, svc service.SecondFactorService) echo.HandlerFunc {
@@ -32,9 +33,20 @@ func PageHandler(jwt *auth.JWTService, users *service.UserService, svc service.S
 			return c.String(500, "server error")
 		}
 
+		var hasTOTP, hasWebAuthn bool
+		for _, m := range methods {
+			switch m {
+			case "totp":
+				hasTOTP = true
+			case "webauthn":
+				hasWebAuthn = true
+			}
+		}
+
 		return Page(&ProfileData{
-			User:           user,
-			EnabledMethods: methods,
+			User:        user,
+			HasTOTP:     hasTOTP,
+			HasWebAuthn: hasWebAuthn,
 		}).Render(c.Request().Context(), c.Response())
 	}
 }

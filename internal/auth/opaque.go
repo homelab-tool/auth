@@ -95,13 +95,11 @@ func CreateOpaqueServer(db *sql.DB) (*opaque.Server, error) {
 	return server, nil
 }
 
-const (
-	name_key_material = "opaque_skm"
-)
+const nameKeyMaterial = "opaque_skm"
 
 func loadKeyMaterial(db *sql.DB, conf *opaque.Configuration) (*opaque.ServerKeyMaterial, error) {
 	var bytes []byte
-	var err = db.QueryRow("SELECT value FROM secrets WHERE name = ?", name_key_material).Scan(&bytes)
+	var err = db.QueryRow("SELECT value FROM secrets WHERE name = ?", nameKeyMaterial).Scan(&bytes)
 	if err == nil {
 		return conf.DecodeServerKeyMaterial(bytes)
 	}
@@ -118,12 +116,12 @@ func loadKeyMaterial(db *sql.DB, conf *opaque.Configuration) (*opaque.ServerKeyM
 	}
 
 	bytes = skm.Encode()
-	if _, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", name_key_material, bytes); err != nil {
+	if _, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", nameKeyMaterial, bytes); err != nil {
 		return nil, err
 	}
 
 	// Read back and decode to verify the round-trip works, matching restart behavior.
-	err = db.QueryRow("SELECT value FROM secrets WHERE name = ?", name_key_material).Scan(&bytes)
+	err = db.QueryRow("SELECT value FROM secrets WHERE name = ?", nameKeyMaterial).Scan(&bytes)
 	if err != nil {
 		return nil, err
 	}

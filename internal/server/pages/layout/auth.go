@@ -1,7 +1,6 @@
 package layout
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/homelab-tool/auth/internal/auth"
@@ -45,8 +44,8 @@ func UserIDFromCookie(c *echo.Context, jwt *auth.JWTService) (int64, error) {
 	if err != nil {
 		return 0, echo.NewHTTPError(401, "unauthorized")
 	}
-	var userID int64
-	if _, err := fmt.Sscanf(claims.Subject, "%d", &userID); err != nil {
+	userID, err := auth.ParseUserID(claims.Subject)
+	if err != nil {
 		return 0, echo.NewHTTPError(500, "server error")
 	}
 	return userID, nil
