@@ -10,6 +10,7 @@ import (
 
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api"
+	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/testhelpers"
 	"github.com/labstack/echo/v5"
@@ -69,7 +70,13 @@ func NewTestServer(t *testing.T, db *sql.DB, opts *NewTestServerOpts) *echo.Echo
 		TOTP:            totpSvc,
 		SiteConfigs:     siteConfigSvc,
 	}
-	err = a.SetupRoutes(e.Group("/api"), opaqueServer)
+	sfHandler, err := secondfactor.NewHandler(
+		a.Users, a.Credentials, a.JWT, a.WebAuthn,
+		a.SecondFactorSvc, a.TOTP,
+	)
+	require.NoError(t, err)
+
+	err = a.SetupRoutes(e.Group("/api"), opaqueServer, sfHandler)
 	require.NoError(t, err)
 	return e
 }

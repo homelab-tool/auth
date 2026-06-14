@@ -103,18 +103,6 @@ async function init() {
         if (passkeyBtn) {
             passkeyBtn.addEventListener("click", handlePasskeyLogin);
         }
-
-        const totpForm = document.getElementById("totp-form");
-        if (totpForm) {
-            totpForm.addEventListener("submit", handleTOTP);
-        }
-
-        const skip2faBtn = document.getElementById("skip-2fa");
-        if (skip2faBtn) {
-            skip2faBtn.addEventListener("click", () => {
-                window.location.href = "/profile";
-            });
-        }
     }
 
     if (document.readyState === "loading") {
@@ -141,78 +129,24 @@ async function handleLogin(e: Event) {
     if (result.kind === "token") {
         await afterLogin(result.token);
     } else {
-        show2FASection(result.sessionId, result.methods);
+        htmx.ajax(
+            "GET",
+            `/login/2fa/init?session_id=${result.sessionId}&methods=${result.methods.join(",")}`,
+            {
+                target: "#login-2fa-section",
+                swap: "outerHTML",
+            },
+        );
     }
 }
 
-function show2FASection(sessionId: string, methods: string[]) {
-    const section = document.getElementById("2fa-section");
-    const sidInput = getInput("totp-session-id");
-    const totpForm = document.getElementById("totp-form");
-    const webauthnBtn = document.getElementById("webauthn-2fa");
-
-    if (!section) return;
-    sidInput.value = sessionId;
-
-    if (totpForm) totpForm.style.display = methods.includes("totp") ? "block" : "none";
-    if (webauthnBtn) {
-        webauthnBtn.style.display = methods.includes("webauthn") ? "inline" : "none";
-        webauthnBtn.addEventListener("click", () => handleWebAuthn2FA(sessionId), { once: true });
-    }
-    section.style.display = "block";
-}
-
-type CredentialRequestOptionsJSON = Omit<PublicKeyCredentialRequestOptions, "challenge"> & {
+type CredentialRequestOptionsJSON = Omit<
+    PublicKeyCredentialRequestOptions,
+    "challenge" | "allowCredentials"
+> & {
     challenge: string;
+    allowCredentials?: Array<Omit<PublicKeyCredentialDescriptor, "id"> & { id: string }>;
 };
-
-async function handleWebAuthn2FA(sessionId: string) {
-    const res1 = await fetch("/api/opaque/login/2fa/webauthn/start", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId }),
-    });
-    if (!res1.ok) {
-        return;
-    }
-    const json: { publicKey: CredentialRequestOptionsJSON } = await res1.json();
-    const { publicKey } = json;
-
-    const credential = await navigator.credentials.get({
-        publicKey: {
-            ...publicKey,
-            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
-        },
-    });
-    if (!credential) return;
-
-    const res2 = await fetch("/api/opaque/login/2fa/webauthn/finish", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.assign({}, credential, { sessionId })),
-    });
-    if (!res2.ok) {
-        return;
-    }
-
-    const data = await res2.json();
-    await afterLogin(data.token);
-}
-
-async function handleTOTP(e: Event) {
-    e.preventDefault();
-    const code = getInput("totp-code").value;
-    const sessionId = getInput("totp-session-id").value;
-
-    const res = await fetch("/api/opaque/login/2fa/totp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, code }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
-    await afterLogin(data.token);
-}
 
 async function handlePasskeyLogin() {
     const res1 = await fetch("/api/webauthn/login/start", {
@@ -223,12 +157,17 @@ async function handlePasskeyLogin() {
     const json: { publicKey: CredentialRequestOptionsJSON } = await res1.json();
     const { publicKey } = json;
 
-    const credential = await navigator.credentials.get({
-        publicKey: {
-            ...publicKey,
-            challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
-        },
-    });
+    const publicKeyCred = {
+        ...publicKey,
+        challenge: Uint8Array.fromBase64(publicKey.challenge, { alphabet: "base64url" }).buffer,
+        allowCredentials: publicKey.allowCredentials?.map<PublicKeyCredentialDescriptor>((cred) =>
+            Object.assign({}, cred, {
+                id: Uint8Array.fromBase64(cred.id, { alphabet: "base64url" }).buffer,
+            }),
+        ),
+    } as PublicKeyCredentialRequestOptions;
+
+    const credential = await navigator.credentials.get({ publicKey: publicKeyCred });
     if (!credential) throw new Error("passkey login cancelled");
 
     const res2 = await fetch("/api/webauthn/login/finish", {

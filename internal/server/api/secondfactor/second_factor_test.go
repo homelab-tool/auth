@@ -168,8 +168,8 @@ func TestSecondFactorLoginFullFlow(t *testing.T) {
 	assertionResponse := virtualwebauthn.CreateAssertionResponse(rp, authenticator, cred, *assertionOptions)
 	assertionResponse = addUserHandle(t, assertionResponse, 1)
 
-	body = `{"sessionId":"` + sessionID + `",` + assertionResponse[1:]
-	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/finish", strings.NewReader(body))
+	body = `{` + assertionResponse[1:]
+	req = httptest.NewRequest(http.MethodPost, "/api/opaque/login/2fa/webauthn/finish?sessionId="+sessionID, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec = httptest.NewRecorder()
 	srv.ServeHTTP(rec, req)

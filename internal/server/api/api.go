@@ -25,15 +25,7 @@ type Api struct {
 	SiteConfigs     *service.SiteConfigService
 }
 
-func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server) error {
-	sfHandler, err := secondfactor.NewHandler(
-		api.Users, api.Credentials, api.JWT, api.WebAuthn,
-		api.SecondFactorSvc, api.TOTP,
-	)
-	if err != nil {
-		return err
-	}
-
+func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server, sfHandler *secondfactor.Handler) error {
 	opaqueHandler, err := opaque.NewHandler(
 		opaqueServer, api.Opaque, api.JWT, sfHandler,
 	)

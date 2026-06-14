@@ -8,6 +8,7 @@ import (
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
+	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 	"github.com/homelab-tool/auth/internal/server/pages/login"
 	"github.com/homelab-tool/auth/internal/server/pages/profile"
@@ -88,6 +89,14 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
+	sfHandler, err := secondfactor.NewHandler(
+		userSvc, credentialSvc, jwtService, webAuthnSvc,
+		secondFactorSvc, totpSvc,
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	api := api.Api{
 		DB:              db,
 		JWT:             jwtService,
@@ -100,7 +109,7 @@ func CreateApp() (*App, error) {
 		SiteConfigs:     siteConfigSvc,
 	}
 
-	if err = api.SetupRoutes(e.Group("/api"), opaqueServer); err != nil {
+	if err = api.SetupRoutes(e.Group("/api"), opaqueServer, sfHandler); err != nil {
 		return nil, err
 	}
 
@@ -123,6 +132,10 @@ func CreateApp() (*App, error) {
 	e.POST("/register/2fa/totp/verify", enrollHandler.HandleTOTPVerify)
 	e.POST("/auth/set-cookie", layout.SetCookieHandler(jwtService))
 	e.POST("/auth/logout", layout.LogoutHandler)
+
+	twoFAHandler := login.NewTwoFAHandler(sfHandler, jwtService)
+	e.GET("/login/2fa/init", twoFAHandler.Init2FA)
+	e.POST("/login/2fa/totp", twoFAHandler.VerifyTOTP)
 
 	app := &App{
 		Router: e,

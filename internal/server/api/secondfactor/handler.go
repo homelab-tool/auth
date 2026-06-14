@@ -1,9 +1,9 @@
 package secondfactor
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -142,25 +142,18 @@ func (h *Handler) login2FAStart(c *echo.Context) error {
 }
 
 func (h *Handler) login2FAFinish(c *echo.Context) error {
+	sessionID := c.QueryParam("sessionId")
+	if sessionID == "" {
+		return c.String(400, "invalid request")
+	}
+
 	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
 	if err != nil {
 		log.Err(err).Msg("failed to read request body")
 		return c.String(400, "invalid request")
 	}
 
-	var envelope struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		log.Err(err).Msg("failed to parse 2fa finish envelope")
-		return c.String(400, "invalid request")
-	}
-
-	if envelope.SessionID == "" {
-		return c.String(400, "invalid request")
-	}
-
-	pending, found := h.pending2FA.Get(envelope.SessionID)
+	pending, found := h.pending2FA.Get(sessionID)
 	if !found || pending == nil {
 		return c.String(400, "invalid request")
 	}
@@ -200,7 +193,7 @@ func (h *Handler) login2FAFinish(c *echo.Context) error {
 	}
 
 	h.webauthn2FA.Del(challenge)
-	h.pending2FA.Del(envelope.SessionID)
+	h.pending2FA.Del(sessionID)
 
 	token, err := h.jwtService.GenerateToken(pending.userID)
 	if err != nil {
@@ -351,6 +344,30 @@ func (h *Handler) login2FATOTP(c *echo.Context) error {
 	}
 
 	return c.JSON(200, map[string]string{"token": token})
+}
+
+func (h *Handler) ValidatePendingTOTP(ctx context.Context, sessionID, code string) (string, error) {
+	pending, found := h.pending2FA.Get(sessionID)
+	if !found || pending == nil {
+		return "", fmt.Errorf("invalid session")
+	}
+
+	valid, err := h.totpService.ValidateCode(ctx, pending.userID, code)
+	if err != nil {
+		return "", err
+	}
+	if !valid {
+		return "", fmt.Errorf("invalid code")
+	}
+
+	h.pending2FA.Del(sessionID)
+
+	token, err := h.jwtService.GenerateToken(pending.userID)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate jwt: %w", err)
+	}
+
+	return token, nil
 }
 
 func (h *Handler) register2FATOTPGenerate(c *echo.Context) error {

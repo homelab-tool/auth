@@ -35,4 +35,24 @@ test("enroll WebAuthn 2FA for OPAQUE user", async ({ page, e2e, context }) => {
         await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
         await expect(page.locator("#profile-2fa")).toContainText("Enabled");
     });
+
+    await test.step("logout", async () => {
+        await page.click("button:has-text('Log Out')");
+        await expect(page).toHaveURL(`${e2e.authUrl}/login`);
+    });
+
+    await test.step("login with password shows 2FA challenge", async () => {
+        await page.fill("#clientId", username);
+        await page.fill("#password", password);
+        await page.click("#login-form button[type='submit']");
+
+        await expect(page.locator("#login-2fa-section")).toBeVisible();
+        await expect(page.locator("#webauthn-2fa")).toBeVisible();
+    });
+
+    await test.step("complete login with WebAuthn 2FA", async () => {
+        await page.click("#webauthn-2fa");
+        await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+        await expect(page.locator("#profile-2fa")).toContainText("Enabled");
+    });
 });
