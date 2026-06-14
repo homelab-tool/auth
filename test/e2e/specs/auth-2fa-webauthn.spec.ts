@@ -1,58 +1,61 @@
 import { test, expect } from "../fixtures";
+import { LoginPage } from "../pages/LoginPage";
+import { RegisterPage } from "../pages/RegisterPage";
+import { ProfilePage } from "../pages/ProfilePage";
+import { TwoFAEnrollmentPage } from "../pages/TwoFAEnrollmentPage";
+import { TwoFAChallengePage } from "../pages/TwoFAChallengePage";
+import { setupVirtualAuthenticator } from "../pages/WebAuthnHelper";
 
 test("enroll WebAuthn 2FA for OPAQUE user", async ({ page, app, context }) => {
-    const cdp = await context.newCDPSession(page);
-    await cdp.send("WebAuthn.enable");
-    await cdp.send("WebAuthn.addVirtualAuthenticator", {
-        options: {
-            protocol: "ctap2",
-            transport: "internal",
-            hasResidentKey: true,
-            hasUserVerification: true,
-            isUserVerified: true,
-        },
-    });
+    await setupVirtualAuthenticator(context, page);
 
     const username = "webauthn2fa-user";
     const password = "test-password";
 
     await test.step("register and navigate to 2FA enrollment", async () => {
-        await page.goto(`${app.authUrl}/register`);
-        await page.fill("#clientId", username);
-        await page.fill("#password", password);
-        await page.fill("#confirm", password);
-        await page.click("#register-opaque-form button[type='submit']");
-        await expect(page.locator("#enrollment-section")).toBeVisible();
+        const register = new RegisterPage(page, app.authUrl);
+        await register.goto();
+        await register.clientId.fill(username);
+        await register.password.fill(password);
+        await register.confirm.fill(password);
+        await register.opaqueSubmitButton.click();
+        await expect(register.enrollmentSection).toBeVisible();
     });
 
     await test.step("set up WebAuthn security key", async () => {
-        await page.click("#webauthn-2fa-setup");
-        await expect(page.locator("#webauthn-2fa-status")).toContainText("successfully");
+        const enrollment = new TwoFAEnrollmentPage(page, app.authUrl);
+        await enrollment.webauthnSetupButton.click();
+        await expect(enrollment.webauthnStatus).toContainText("successfully");
     });
 
     await test.step("verify WebAuthn shows as enabled on profile", async () => {
-        await page.click("a:has-text('Skip for now')");
+        const register = new RegisterPage(page, app.authUrl);
+        await register.skipLink.click();
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
-        await expect(page.locator("#profile-2fa")).toContainText("Enabled");
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
 
     await test.step("logout", async () => {
-        await page.click("button:has-text('Log Out')");
+        await new ProfilePage(page, app.authUrl).logoutButton.click();
         await expect(page).toHaveURL(`${app.authUrl}/login`);
     });
 
     await test.step("login with password shows 2FA challenge", async () => {
-        await page.fill("#clientId", username);
-        await page.fill("#password", password);
-        await page.click("#login-form button[type='submit']");
+        const login = new LoginPage(page, app.authUrl);
+        await login.goto();
+        await login.clientId.fill(username);
+        await login.password.fill(password);
+        await login.submitButton.click();
 
-        await expect(page.locator("#login-2fa-section")).toBeVisible();
-        await expect(page.locator("#webauthn-2fa")).toBeVisible();
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await expect(challenge.section).toBeVisible();
+        await expect(challenge.webauthnButton).toBeVisible();
     });
 
     await test.step("complete login with WebAuthn 2FA", async () => {
-        await page.click("#webauthn-2fa");
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await challenge.webauthnButton.click();
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
-        await expect(page.locator("#profile-2fa")).toContainText("Enabled");
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
 });

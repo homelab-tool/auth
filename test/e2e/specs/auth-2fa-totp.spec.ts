@@ -1,4 +1,9 @@
 import { test, expect } from "../fixtures";
+import { LoginPage } from "../pages/LoginPage";
+import { RegisterPage } from "../pages/RegisterPage";
+import { ProfilePage } from "../pages/ProfilePage";
+import { TwoFAEnrollmentPage } from "../pages/TwoFAEnrollmentPage";
+import { TwoFAChallengePage } from "../pages/TwoFAChallengePage";
 
 test("enroll, verify TOTP required on login, then disable", async ({ page, app, totp }) => {
     const username = "totp-user";
@@ -6,57 +11,61 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app, 
     let secret: string | null = null;
 
     await test.step("register and navigate to 2FA enrollment", async () => {
-        await page.goto(`${app.authUrl}/register`);
-        await page.fill("#clientId", username);
-        await page.fill("#password", password);
-        await page.fill("#confirm", password);
-        await page.click("#register-opaque-form button[type='submit']");
-        await expect(page.locator("#enrollment-section")).toBeVisible();
+        const register = new RegisterPage(page, app.authUrl);
+        await register.goto();
+        await register.clientId.fill(username);
+        await register.password.fill(password);
+        await register.confirm.fill(password);
+        await register.opaqueSubmitButton.click();
+        await expect(register.enrollmentSection).toBeVisible();
     });
 
     await test.step("set up TOTP authenticator app", async () => {
-        await page.click("button:has-text('Set Up Authenticator App')");
-
-        const secretEl = page.locator("#totp-section code");
-        await expect(secretEl).toBeVisible();
-        secret = await secretEl.textContent();
+        const enrollment = new TwoFAEnrollmentPage(page, app.authUrl);
+        await enrollment.setupTOTPButton.click();
+        await expect(enrollment.secretCode).toBeVisible();
+        secret = await enrollment.secretCode.textContent();
         expect(secret).toBeTruthy();
 
         const code = await totp.generate(secret!);
         expect(code).toBeTruthy();
-
-        await page.fill("#totp-code", code);
-        await page.click("button:has-text('Verify')");
-        await expect(page.locator("#totp-section")).toContainText("successfully");
+        await enrollment.totpInput.fill(code);
+        await enrollment.verifyButton.click();
+        await expect(enrollment.totpSection).toContainText("successfully");
     });
 
     await test.step("go to profile and verify TOTP enabled", async () => {
-        await page.click("a:has-text('Skip for now')");
+        const register = new RegisterPage(page, app.authUrl);
+        await register.skipLink.click();
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
-        await expect(page.locator("#profile-2fa")).toContainText("Enabled");
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
 
     await test.step("logout", async () => {
-        await page.click("button:has-text('Log Out')");
+        await new ProfilePage(page, app.authUrl).logoutButton.click();
         await expect(page).toHaveURL(`${app.authUrl}/login`);
     });
 
     await test.step("login with password shows 2FA challenge", async () => {
-        await page.fill("#clientId", username);
-        await page.fill("#password", password);
-        await page.click("#login-form button[type='submit']");
+        const login = new LoginPage(page, app.authUrl);
+        await login.goto();
+        await login.clientId.fill(username);
+        await login.password.fill(password);
+        await login.submitButton.click();
 
-        await expect(page.locator("#login-2fa-section")).toBeVisible();
-        await expect(page.locator("#totp-code")).toBeVisible();
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await expect(challenge.section).toBeVisible();
+        await expect(challenge.totpInput).toBeVisible();
     });
 
     await test.step("complete login with TOTP code", async () => {
         const code = await totp.generate(secret!);
-        await page.fill("#totp-code", code);
-        await page.click("#login-2fa-section button[type='submit']");
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await challenge.totpInput.fill(code);
+        await challenge.submitButton.click();
 
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
-        await expect(page.locator("#profile-2fa")).toContainText("Enabled");
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
 
     await test.step("disable TOTP via API and verify", async () => {
@@ -70,6 +79,6 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app, 
         expect(resp.status()).toBe(200);
 
         await page.reload();
-        await expect(page.locator("#profile-2fa")).toContainText("Not set up");
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Not set up");
     });
 });

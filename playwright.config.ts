@@ -16,14 +16,16 @@ export default defineConfig({
         },
         navigationTimeout: NAVIGATION_MS,
         ignoreHTTPSErrors: true,
-        launchOptions: {
-            args: ["--host-resolver-rules=MAP *.mydomain.test 127.0.0.1"],
-        },
     },
     projects: [
         {
             name: "chromium",
-            use: { channel: "chromium" },
+            use: {
+                channel: "chromium",
+                launchOptions: {
+                    args: ["--host-resolver-rules=MAP *.mydomain.test 127.0.0.1"],
+                },
+            },
         },
     ],
     reporter: [["list"], ["html", { open: "never" }]],

@@ -1,14 +1,18 @@
 import { test, expect } from "../fixtures";
 import { caddyRequest } from "../lib/caddy-client";
+import { RegisterPage } from "../pages/RegisterPage";
+import { ProfilePage } from "../pages/ProfilePage";
 
 test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
-    await page.goto(`${app.authUrl}/register`);
-    await page.fill("#clientId", "caddy-user");
-    await page.fill("#password", "test-password");
-    await page.fill("#confirm", "test-password");
-    await page.click("#register-opaque-form button[type='submit']");
-    await expect(page.locator("#enrollment-section")).toBeVisible();
-    await page.click("a:has-text('Skip for now')");
+    const register = new RegisterPage(page, app.authUrl);
+    await register.goto();
+    await register.clientId.fill("caddy-user");
+    await register.password.fill("test-password");
+    await register.confirm.fill("test-password");
+    await register.opaqueSubmitButton.click();
+    await expect(register.enrollmentSection).toBeVisible();
+    const profile = new ProfilePage(page, app.authUrl);
+    await register.skipLink.click();
     await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
     const cookies = await page.context().cookies();
