@@ -12,7 +12,7 @@ export default defineConfig({
         format: "esm",
         minify: true,
         sourcemap: true,
-        cleanDir: true
+        cleanDir: true,
     },
     resolve: {
         modules: ["node_modules"],

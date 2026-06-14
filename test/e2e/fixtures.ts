@@ -9,47 +9,15 @@ import https from "node:https";
 import { generate as generateTOTP } from "otplib";
 import { CONTAINER_STARTUP_MS, CONTAINER_POLL_INTERVAL_MS, CONTAINER_STOP_MS } from "./timeouts";
 
-const caddyfile = [
-    "{",
-    "    debug",
-    "    local_certs",
-    "}",
-    "",
-    "auth.mydomain.test {",
-    "    tls internal",
-    "    reverse_proxy auth:1337",
-    "}",
-    "",
-    "app1.mydomain.test {",
-    "    tls internal",
-    "    forward_auth auth:1337 {",
-    "        uri /caddy/forward_auth",
-    "    }",
-    '    respond "Hello World from caddy!"',
-    "}",
-    "",
-    "app2.mydomain.test {",
-    "    tls internal",
-    "    forward_auth auth:1337 {",
-    "        uri /caddy/forward_auth",
-    "    }",
-    '    respond "App 2"',
-    "}",
-].join("\n");
-
-export type E2EWorld = {
+export type AppWorld = {
     authUrl: string;
-    caddyUrl: string;
     adminUsername: string;
     adminPassword: string;
 };
 
-let sharedNetwork: StartedNetwork | null = null;
-let sharedAuth: StartedTestContainer | null = null;
-let sharedCaddy: StartedTestContainer | null = null;
-let adminCredentials: { username: string; password: string } | null = null;
-let authLogCollector: ReturnType<typeof logCollector> | null = null;
-let caddyLogCollector: ReturnType<typeof logCollector> | null = null;
+export type CaddyWorld = {
+    caddyUrl: string;
+};
 
 function sleep(ms: number): Promise<void> {
     return new Promise((r) => setTimeout(r, ms));
@@ -147,93 +115,132 @@ function extractAdminCredentials(logs: string): { username: string; password: st
     return { username, password };
 }
 
-async function startContainers(testInfo: TestInfo) {
-    const network = await new Network().start();
-    sharedNetwork = network;
-
-    const hostPort = Math.floor(Math.random() * 30000) + 30000;
-    authLogCollector = logCollector();
-    sharedAuth = await new GenericContainer("homelab-auth:e2e")
-        .withExposedPorts({ host: hostPort, container: 1337 })
-        .withNetwork(network)
-        .withNetworkAliases("auth")
-        .withEnvironment({
-            WEBAUTHN_RPID: "localhost",
-            WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
-            ADMIN_USERNAME: "admin",
-        })
-        .withLogConsumer(authLogCollector.consumer)
-        .start();
-
-    await waitForHealth(sharedAuth, 1337, "/health", testInfo);
-
-    adminCredentials = extractAdminCredentials(authLogCollector.getLogs());
-
-    caddyLogCollector = logCollector();
-    sharedCaddy = await new GenericContainer("caddy:2-alpine")
-        .withExposedPorts(443)
-        .withNetwork(network)
-        .withNetworkAliases("caddy")
-        .withCopyContentToContainer([{ content: caddyfile, target: "/etc/caddy/Caddyfile" }])
-        .withLogConsumer(caddyLogCollector.consumer)
-        .start();
-
-    await waitForHealth(sharedCaddy, 443, "/health", testInfo, {
-        tls: true,
-        host: "auth.mydomain.test",
-    });
-}
-
-async function stopContainers() {
-    await sharedCaddy?.stop({ timeout: CONTAINER_STOP_MS });
-    await sharedAuth?.stop({ timeout: CONTAINER_STOP_MS });
-    await sharedNetwork?.stop();
-    sharedNetwork = null;
-    sharedAuth = null;
-    sharedCaddy = null;
-}
-
-process.on("beforeExit", stopContainers);
+const caddyfile = [
+    "{",
+    "    debug",
+    "    local_certs",
+    "}",
+    "",
+    "auth.mydomain.test {",
+    "    tls internal",
+    "    reverse_proxy auth:1337",
+    "}",
+    "",
+    "app1.mydomain.test {",
+    "    tls internal",
+    "    forward_auth auth:1337 {",
+    "        uri /caddy/forward_auth",
+    "    }",
+    '    respond "Hello World from caddy!"',
+    "}",
+    "",
+    "app2.mydomain.test {",
+    "    tls internal",
+    "    forward_auth auth:1337 {",
+    "        uri /caddy/forward_auth",
+    "    }",
+    '    respond "App 2"',
+    "}",
+].join("\n");
 
 export const test = base.extend<{
-    e2e: E2EWorld;
+    network: StartedNetwork;
+    app: AppWorld;
+    caddy: CaddyWorld;
     totp: { generate: (secret: string) => Promise<string> };
 }>({
-    e2e: async ({ page }, use, testInfo) => {
-        if (!sharedNetwork) {
-            await startContainers(testInfo);
-        }
+    network: [
+        // oxlint-disable-next-line no-empty-pattern
+        async ({}, use) => {
+            const network = await new Network().start();
+            await use(network);
+            await network.stop();
+        },
+        { scope: "test" },
+    ],
 
-        const logs: string[] = [];
-        page.on("console", (msg) => logs.push(`[${msg.type()}] ${msg.text()}`));
-        page.on("pageerror", (err) => logs.push(`[PAGE_ERROR] ${err}`));
+    app: [
+        async ({ network, page }, use, testInfo) => {
+            const hostPort = Math.floor(Math.random() * 30000) + 30000;
+            const authLog = logCollector();
+            const auth = await new GenericContainer("homelab-auth:e2e")
+                .withExposedPorts({ host: hostPort, container: 1337 })
+                .withNetwork(network)
+                .withNetworkAliases("auth")
+                .withEnvironment({
+                    WEBAUTHN_RPID: "localhost",
+                    WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
+                    ADMIN_USERNAME: "admin",
+                })
+                .withLogConsumer(authLog.consumer)
+                .start();
 
-        await use({
-            authUrl: `http://localhost:${sharedAuth!.getMappedPort(1337)}`,
-            caddyUrl: `https://127.0.0.1:${sharedCaddy!.getMappedPort(443)}`,
-            adminUsername: adminCredentials!.username,
-            adminPassword: adminCredentials!.password,
-        });
+            await waitForHealth(auth, 1337, "/health", testInfo);
 
-        testInfo.attachments.push({
-            name: "auth.log",
-            contentType: "text/plain",
-            body: Buffer.from(authLogCollector!.getLogs()),
-        });
-        testInfo.attachments.push({
-            name: "caddy.log",
-            contentType: "text/plain",
-            body: Buffer.from(caddyLogCollector!.getLogs()),
-        });
+            const creds = extractAdminCredentials(authLog.getLogs());
 
-        if (logs.length > 0) {
-            testInfo.attachments.push({
-                name: "browser-console.txt",
-                contentType: "text/plain",
-                body: Buffer.from(logs.join("\n")),
+            const consoleLogs: string[] = [];
+            page.on("console", (msg) => consoleLogs.push(`[${msg.type()}] ${msg.text()}`));
+            page.on("pageerror", (err) => consoleLogs.push(`[PAGE_ERROR] ${err}`));
+
+            await use({
+                authUrl: `http://localhost:${hostPort}`,
+                adminUsername: creds.username,
+                adminPassword: creds.password,
             });
-        }
-    },
+
+            if (consoleLogs.length > 0) {
+                testInfo.attachments.push({
+                    name: "browser-console.txt",
+                    contentType: "text/plain",
+                    body: Buffer.from(consoleLogs.join("\n")),
+                });
+            }
+
+            testInfo.attachments.push({
+                name: "auth.log",
+                contentType: "text/plain",
+                body: Buffer.from(authLog.getLogs()),
+            });
+
+            await auth.stop({ timeout: CONTAINER_STOP_MS });
+        },
+        { scope: "test" },
+    ],
+
+    caddy: [
+        async ({ network, app: _app }, use, testInfo) => {
+            const caddyLog = logCollector();
+            const caddy = await new GenericContainer("caddy:2-alpine")
+                .withExposedPorts(443)
+                .withNetwork(network)
+                .withNetworkAliases("caddy")
+                .withCopyContentToContainer([
+                    { content: caddyfile, target: "/etc/caddy/Caddyfile" },
+                ])
+                .withLogConsumer(caddyLog.consumer)
+                .start();
+
+            await waitForHealth(caddy, 443, "/health", testInfo, {
+                tls: true,
+                host: "auth.mydomain.test",
+            });
+
+            await use({
+                caddyUrl: `https://127.0.0.1:${caddy.getMappedPort(443)}`,
+            });
+
+            testInfo.attachments.push({
+                name: "caddy.log",
+                contentType: "text/plain",
+                body: Buffer.from(caddyLog.getLogs()),
+            });
+
+            await caddy.stop({ timeout: CONTAINER_STOP_MS });
+        },
+        { scope: "test" },
+    ],
+
     // oxlint-disable-next-line no-empty-pattern
     totp: async ({}, use) => {
         void use({ generate: (secret: string) => generateTOTP({ secret }) });

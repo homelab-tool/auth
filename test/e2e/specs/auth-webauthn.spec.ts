@@ -1,6 +1,6 @@
 import { test, expect } from "../fixtures";
 
-test("register, logout and login with passkey", async ({ page, e2e, context }) => {
+test("register, logout and login with passkey", async ({ page, app, context }) => {
     const cdp = await context.newCDPSession(page);
     await cdp.send("WebAuthn.enable");
     await cdp.send("WebAuthn.addVirtualAuthenticator", {
@@ -14,14 +14,14 @@ test("register, logout and login with passkey", async ({ page, e2e, context }) =
     });
 
     await test.step("register", async () => {
-        await page.goto(`${e2e.authUrl}/register`);
+        await page.goto(`${app.authUrl}/register`);
 
         await page.fill("#webauthn-displayName", "Passkey User");
         await page.click("#register-webauthn-form button[type='submit']");
 
         await expect(page.locator("#enrollment-section")).toBeVisible();
         await page.click("a:has-text('Skip for now')");
-        await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
         await expect(page.locator("h1")).toHaveText("Profile");
         const dds = page.locator("dd");
@@ -31,12 +31,12 @@ test("register, logout and login with passkey", async ({ page, e2e, context }) =
 
     await test.step("logout", async () => {
         await page.click("button:has-text('Log Out')");
-        await expect(page).toHaveURL(`${e2e.authUrl}/login`);
+        await expect(page).toHaveURL(`${app.authUrl}/login`);
     });
 
     await test.step("login", async () => {
         await page.click("#passkey-login");
-        await expect(page).toHaveURL(`${e2e.authUrl}/profile`);
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
         await expect(page.locator("h1")).toHaveText("Profile");
     });
 });
