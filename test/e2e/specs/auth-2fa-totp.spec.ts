@@ -1,11 +1,12 @@
 import { test, expect } from "../fixtures";
+import { generate as generateTOTP } from "otplib";
 import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { ProfilePage } from "../pages/ProfilePage";
 import { TwoFAEnrollmentPage } from "../pages/TwoFAEnrollmentPage";
 import { TwoFAChallengePage } from "../pages/TwoFAChallengePage";
 
-test("enroll, verify TOTP required on login, then disable", async ({ page, app, totp }) => {
+test("enroll, verify TOTP required on login, then disable", async ({ page, app }) => {
     const username = "totp-user";
     const password = "test-password";
     let secret: string | null = null;
@@ -27,7 +28,7 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app, 
         secret = await enrollment.secretCode.textContent();
         expect(secret).toBeTruthy();
 
-        const code = await totp.generate(secret!);
+        const code = await generateTOTP({ secret: secret! });
         expect(code).toBeTruthy();
         await enrollment.totpInput.fill(code);
         await enrollment.verifyButton.click();
@@ -59,7 +60,7 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app, 
     });
 
     await test.step("complete login with TOTP code", async () => {
-        const code = await totp.generate(secret!);
+        const code = await generateTOTP({ secret: secret! });
         const challenge = new TwoFAChallengePage(page, app.authUrl);
         await challenge.totpInput.fill(code);
         await challenge.submitButton.click();

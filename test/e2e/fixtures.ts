@@ -6,7 +6,6 @@ import {
     type StartedTestContainer,
 } from "testcontainers";
 import https from "node:https";
-import { generate as generateTOTP } from "otplib";
 import { CONTAINER_STARTUP_MS, CONTAINER_POLL_INTERVAL_MS, CONTAINER_STOP_MS } from "./timeouts";
 
 export type AppWorld = {
@@ -147,7 +146,6 @@ export const test = base.extend<{
     network: StartedNetwork;
     app: AppWorld;
     caddy: CaddyWorld;
-    totp: { generate: (secret: string) => Promise<string> };
 }>({
     network: [
         // oxlint-disable-next-line no-empty-pattern
@@ -240,11 +238,6 @@ export const test = base.extend<{
         },
         { scope: "test" },
     ],
-
-    // oxlint-disable-next-line no-empty-pattern
-    totp: async ({}, use) => {
-        void use({ generate: (secret: string) => generateTOTP({ secret }) });
-    },
 });
 
 export { expect } from "@playwright/test";

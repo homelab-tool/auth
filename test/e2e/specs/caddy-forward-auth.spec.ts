@@ -1,7 +1,6 @@
 import { test, expect } from "../fixtures";
 import { caddyRequest } from "../lib/caddy-client";
 import { RegisterPage } from "../pages/RegisterPage";
-import { ProfilePage } from "../pages/ProfilePage";
 
 test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
     const register = new RegisterPage(page, app.authUrl);
@@ -11,7 +10,6 @@ test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
     await register.confirm.fill("test-password");
     await register.opaqueSubmitButton.click();
     await expect(register.enrollmentSection).toBeVisible();
-    const profile = new ProfilePage(page, app.authUrl);
     await register.skipLink.click();
     await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
