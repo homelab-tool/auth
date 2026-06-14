@@ -9,6 +9,8 @@ export default defineConfig({
     output: {
         dir: "internal/server/pages/static/dist",
         format: "esm",
+        minify: true,
+        sourcemap: true
     },
     resolve: {
         modules: ["node_modules"],
