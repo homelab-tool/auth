@@ -17,10 +17,11 @@ type EnrollmentHandler struct {
 	users        *service.UserService
 	totp         *service.TOTPService
 	secondFactor service.SecondFactorService
+	credentials  *service.CredentialService
 }
 
-func NewEnrollmentHandler(jwt *auth.JWTService, users *service.UserService, totp *service.TOTPService, secondFactor service.SecondFactorService) *EnrollmentHandler {
-	return &EnrollmentHandler{jwt: jwt, users: users, totp: totp, secondFactor: secondFactor}
+func NewEnrollmentHandler(jwt *auth.JWTService, users *service.UserService, totp *service.TOTPService, secondFactor service.SecondFactorService, credentials *service.CredentialService) *EnrollmentHandler {
+	return &EnrollmentHandler{jwt: jwt, users: users, totp: totp, secondFactor: secondFactor, credentials: credentials}
 }
 
 func (h *EnrollmentHandler) PageHandler(c *echo.Context) error {
@@ -136,14 +137,12 @@ func (h *EnrollmentHandler) HandleWebAuthnSetupPage(c *echo.Context) error {
 		return c.Redirect(302, "/login")
 	}
 
-	methods, err := h.secondFactor.Methods(userID)
+	creds, err := h.credentials.ListBy2FAPurpose(c.Request().Context(), userID)
 	if err != nil {
 		return c.String(500, "server error")
 	}
-	for _, m := range methods {
-		if m == "webauthn" {
-			return c.Redirect(302, "/profile")
-		}
+	if len(creds) > 0 {
+		return c.Redirect(302, "/profile")
 	}
 
 	return WebAuthnSetupPage().Render(c.Request().Context(), c.Response())

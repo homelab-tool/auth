@@ -7,6 +7,7 @@ RUN pnpm install --ignore-scripts
 
 COPY internal/server/pages/ internal/server/pages/
 RUN pnpm build
+RUN cp node_modules/htmx.org/dist/htmx.min.js internal/server/pages/static/dist/htmx.min.js
 
 FROM golang:1.26-alpine AS go-builder
 RUN apk add --no-cache gcc musl-dev sqlite-dev

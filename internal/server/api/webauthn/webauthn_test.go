@@ -94,7 +94,7 @@ func TestWebAuthnRegisterStart(t *testing.T) {
 	assert.True(t, ok, "response should contain publicKey field")
 
 	var rowCount int
-	err = db.QueryRow("SELECT COUNT(*) FROM users WHERE auth_method = 'webauthn'").Scan(&rowCount)
+	err = db.QueryRow("SELECT COUNT(*) FROM users").Scan(&rowCount)
 	require.NoError(t, err)
 	assert.Equal(t, 1, rowCount)
 }

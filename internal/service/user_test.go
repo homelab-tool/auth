@@ -14,7 +14,7 @@ func TestUserServiceCreate(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewUserService(db)
 
-	id, err := svc.Create(context.Background(), "webauthn", "testuser")
+	id, err := svc.Create(context.Background(), "testuser")
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), id)
 
@@ -24,19 +24,11 @@ func TestUserServiceCreate(t *testing.T) {
 	assert.Equal(t, "testuser", displayName)
 }
 
-func TestUserServiceCreateInvalidAuthMethod(t *testing.T) {
-	db := newTestDB(t)
-	svc := service.NewUserService(db)
-
-	_, err := svc.Create(context.Background(), "invalid-method", "testuser")
-	assert.ErrorContains(t, err, "CHECK constraint")
-}
-
 func TestUserServiceDelete(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewUserService(db)
 
-	id, err := svc.Create(context.Background(), "webauthn", "testuser")
+	id, err := svc.Create(context.Background(), "testuser")
 	require.NoError(t, err)
 
 	err = svc.Delete(context.Background(), id)
@@ -60,7 +52,7 @@ func TestUserServiceGetDisplayName(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewUserService(db)
 
-	id, err := svc.Create(context.Background(), "webauthn", "testuser")
+	id, err := svc.Create(context.Background(), "testuser")
 	require.NoError(t, err)
 
 	name, err := svc.GetDisplayName(context.Background(), id)
@@ -80,7 +72,7 @@ func TestUserServiceLoadWebAuthnUserNoCredentials(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewUserService(db)
 
-	id, err := svc.Create(context.Background(), "webauthn", "testuser")
+	id, err := svc.Create(context.Background(), "testuser")
 	require.NoError(t, err)
 
 	user, err := svc.LoadWebAuthnUser(context.Background(), id)

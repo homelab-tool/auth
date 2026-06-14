@@ -16,6 +16,5 @@ test("admin user created on first start can login", async ({ page, app }) => {
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
         await expect(profile.heading).toHaveText("Profile");
         await expect(profile.detailItems.nth(0)).toHaveText(app.adminUsername);
-        await expect(profile.detailItems.nth(1)).toHaveText("Password");
     });
 });

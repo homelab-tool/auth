@@ -11,7 +11,6 @@ interface OpaqueLoginToken {
 interface OpaqueLogin2FA {
     kind: "2fa";
     sessionId: string;
-    methods: string[];
 }
 
 type OpaqueLoginResult = OpaqueLoginToken | OpaqueLogin2FA;
@@ -84,7 +83,6 @@ async function opaqueLogin(clientId: string, password: string): Promise<OpaqueLo
         return {
             kind: "2fa",
             sessionId: data.session_id,
-            methods: data.methods,
         };
     }
     throw new Error("unexpected response");
@@ -129,14 +127,10 @@ async function handleLogin(e: Event) {
     if (result.kind === "token") {
         await afterLogin(result.token);
     } else {
-        htmx.ajax(
-            "GET",
-            `/login/2fa/init?session_id=${result.sessionId}&methods=${result.methods.join(",")}`,
-            {
-                target: "#login-2fa-section",
-                swap: "outerHTML",
-            },
-        );
+        htmx.ajax("GET", `/login/2fa/init?session_id=${result.sessionId}`, {
+            target: "#login-2fa-section",
+            swap: "outerHTML",
+        });
     }
 }
 
@@ -177,5 +171,14 @@ async function handlePasskeyLogin() {
     });
     if (!res2.ok) throw new Error(await res2.text());
     const data = await res2.json();
-    await afterLogin(data.token);
+    if (data.token) {
+        await afterLogin(data.token);
+    } else if (data.status === "2fa_required") {
+        htmx.ajax("GET", `/login/2fa/init?session_id=${data.session_id}`, {
+            target: "#login-2fa-section",
+            swap: "outerHTML",
+        });
+    } else {
+        throw new Error("unexpected response");
+    }
 }

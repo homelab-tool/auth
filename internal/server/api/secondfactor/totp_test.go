@@ -61,11 +61,11 @@ func TestTOTPRegisterFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", verifyResp["status"])
 
-	// Verify 2FA is enabled in DB
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = 1 AND method = 'totp' AND enabled = 1").Scan(&count)
+	// Verify TOTP is enabled in DB
+	var enabled int
+	err = db.QueryRow("SELECT enabled FROM totp_secrets WHERE user_id = 1").Scan(&enabled)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, 1, enabled)
 }
 
 func TestTOTPLoginFlow(t *testing.T) {
@@ -114,10 +114,6 @@ func TestTOTPLoginFlow(t *testing.T) {
 	sessionID, ok := loginResp["session_id"].(string)
 	require.True(t, ok)
 	assert.NotEmpty(t, sessionID)
-
-	methods, ok := loginResp["methods"].([]any)
-	require.True(t, ok)
-	assert.Contains(t, methods, "totp")
 
 	// Complete 2FA with TOTP
 	code, err = totp.GenerateCode(genResp.Secret, time.Now())

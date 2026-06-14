@@ -22,7 +22,8 @@ import (
 const maxBodySize = 1 << 20
 
 type Pending2FAState struct {
-	userID int64
+	userID  int64
+	methods []string
 }
 
 type Result struct {
@@ -83,15 +84,30 @@ func (h *Handler) CheckPending(userID int64) (*Result, error) {
 		return nil, err
 	}
 
+	return h.createPendingSession(userID, methods)
+}
+
+func (h *Handler) CreatePendingSession(userID int64, methods []string) (*Result, error) {
+	return h.createPendingSession(userID, methods)
+}
+
+func (h *Handler) createPendingSession(userID int64, methods []string) (*Result, error) {
 	sessionID := generateSessionID()
-	h.pending2FA.SetWithTTL(sessionID, &Pending2FAState{userID: userID}, 1, 5*time.Minute)
+	h.pending2FA.SetWithTTL(sessionID, &Pending2FAState{userID: userID, methods: methods}, 1, 5*time.Minute)
 	h.pending2FA.Wait()
 
 	return &Result{
 		Requires2FA: true,
 		SessionID:   sessionID,
-		Methods:     methods,
 	}, nil
+}
+
+func (h *Handler) GetPendingMethods(sessionID string) ([]string, error) {
+	pending, found := h.pending2FA.Get(sessionID)
+	if !found || pending == nil {
+		return nil, fmt.Errorf("invalid session")
+	}
+	return pending.methods, nil
 }
 
 func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
@@ -289,14 +305,8 @@ func (h *Handler) register2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), userID, credential); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), userID, credential, "2fa"); err != nil {
 		log.Err(err).Msg("failed to persist credential for 2fa")
-		h.webauthn2FA.Del(challenge)
-		return c.String(500, "server error")
-	}
-
-	if err := h.credentialService.EnableSecondFactor(c.Request().Context(), userID); err != nil {
-		log.Err(err).Int64("userID", userID).Msg("failed to enable webauthn 2fa")
 		h.webauthn2FA.Del(challenge)
 		return c.String(500, "server error")
 	}

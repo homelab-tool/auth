@@ -4,14 +4,25 @@ import (
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 )
 
-func authMethodDisplay(method string) string {
-	switch method {
-	case "pass-opaque":
-		return "Password"
-	case "webauthn":
-		return "Passkey"
+func has2FA(methods []string, method string) bool {
+	for _, m := range methods {
+		if m == method {
+			return true
+		}
 	}
-	return method
+	return false
+}
+
+func purposeDisplay(purpose string) string {
+	switch purpose {
+	case "login":
+		return "Login"
+	case "2fa":
+		return "2FA"
+	case "login,2fa":
+		return "Login + 2FA"
+	}
+	return purpose
 }
 
 templ Page(data *ProfileData) {
@@ -20,11 +31,46 @@ templ Page(data *ProfileData) {
 		<dl>
 			<dt>Display Name</dt>
 			<dd>{ data.User.DisplayName }</dd>
-			<dt>Auth Method</dt>
-			<dd>{ authMethodDisplay(data.User.AuthMethod) }</dd>
 			<dt>Member Since</dt>
 			<dd>{ data.User.CreatedAt }</dd>
 		</dl>
+		<hr/>
+		<section id="profile-password">
+			<h2>Password</h2>
+			if data.HasPassword {
+				<p><span style="color: green;">&#10003; Password set</span></p>
+			} else {
+				<p>Password not set</p>
+				<a href="/profile/password" role="button">Set Password</a>
+			}
+		</section>
+		<hr/>
+		<section id="profile-passkeys">
+			<h2>Passkeys ({ len(data.Passkeys) }/5)</h2>
+			if len(data.Passkeys) > 0 {
+				<ul>
+					for _, pk := range data.Passkeys {
+						<li>
+							if pk.Name != "" {
+								<strong>{ pk.Name }</strong>
+							} else {
+								<em>Unnamed</em>
+							}
+							{ " - " }
+							<span>{ purposeDisplay(pk.Purpose) }</span>
+							<button hx-delete="/profile/passkey/{ pk.ID }" hx-target="#profile-passkeys" hx-swap="outerHTML" hx-confirm="Delete this passkey?">Delete</button>
+						</li>
+					}
+				</ul>
+			} else {
+				<p>No passkeys configured.</p>
+			}
+			if len(data.Passkeys) < 5 {
+				<a href="/profile/passkey/add" role="button">Add Passkey</a>
+			} else {
+				<p>Maximum number of passkeys reached.</p>
+			}
+		</section>
 		<hr/>
 		@TwoFASection(data)
 		<form action="/auth/logout" method="post">
@@ -49,16 +95,60 @@ templ TwoFASection(data *ProfileData) {
 			</dd>
 			<dt>Security Key (WebAuthn)</dt>
 			<dd>
-				if data.HasWebAuthn {
+				if has2FA(data.Has2FA, "webauthn") {
 					<span style="color: green;">&#10003; Enabled</span>
-					<button hx-delete="/profile/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable WebAuthn 2FA?">Disable</button>
+					<button hx-delete="/profile/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Remove 2FA from all passkeys?">Disable</button>
 				} else {
 					<span>Not set up</span>
 					<a href="/register/2fa/webauthn" role="button">Set up</a>
 				}
-				</dd>
-			</dl>
+			</dd>
+		</dl>
 	</section>
 }
 
+templ PasswordSetupPage(displayName string) {
+	@layout.Page("Set Password") {
+		<h1>Set Password</h1>
+		<form id="password-setup-form">
+			<div>
+				<label for="password-clientId">Username</label>
+				<input type="text" id="password-clientId" name="clientId" required autocomplete="username"/>
+			</div>
+			<div>
+				<label for="password-pw">Password</label>
+				<input type="password" id="password-pw" required autocomplete="new-password"/>
+			</div>
+			<div>
+				<label for="password-confirm">Confirm Password</label>
+				<input type="password" id="password-confirm" required autocomplete="new-password"/>
+			</div>
+			<button type="submit">Set Password</button>
+		</form>
+		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<script type="module" src="/static/pages/password-setup.js"></script>
+	}
+}
 
+templ AddPasskeyPage() {
+	@layout.Page("Add Passkey") {
+		<h1>Add Passkey</h1>
+		<form id="add-passkey-form">
+			<div>
+				<label for="passkey-name">Passkey Name (optional)</label>
+				<input type="text" id="passkey-name" name="name" maxlength="64"/>
+			</div>
+			<div>
+				<label for="passkey-purpose">Purpose</label>
+				<select id="passkey-purpose" name="purpose" required>
+					<option value="login">Login only</option>
+					<option value="2fa">2FA only</option>
+					<option value="login,2fa">Login + 2FA</option>
+				</select>
+			</div>
+			<button type="submit">Create Passkey</button>
+		</form>
+		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<script type="module" src="/static/pages/add-passkey.js"></script>
+	}
+}

@@ -6,7 +6,6 @@ CREATE TABLE secrets (
 
 CREATE TABLE users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  auth_method TEXT NOT NULL CHECK (auth_method IN ("pass-opaque", "webauthn")),
   display_name TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -15,7 +14,7 @@ CREATE TABLE opaque_user_data (
   client_id TEXT NOT NULL PRIMARY KEY,
   credential_id TEXT NOT NULL UNIQUE,
   registration_record TEXT NOT NULL,
-  user_id INTEGER NOT NULL REFERENCES users(id),
+  user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   ksf_algorithm TEXT NOT NULL,
   ksf_salt BLOB NOT NULL,
   ksf_params TEXT NOT NULL,
@@ -35,17 +34,10 @@ CREATE TABLE webauthn_credentials (
   clone_warning    INTEGER NOT NULL DEFAULT 0,
   backup_eligible  INTEGER NOT NULL DEFAULT 0,
   backup_state     INTEGER NOT NULL DEFAULT 0,
+  purpose          TEXT NOT NULL DEFAULT '',
+  name             TEXT NOT NULL DEFAULT '',
   created_at       TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   last_used_at     TEXT
-);
-
-CREATE TABLE user_second_factors (
-  id         INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  method     TEXT NOT NULL CHECK (method IN ('webauthn', 'totp')),
-  enabled    INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE(user_id, method)
 );
 
 CREATE TABLE totp_secrets (
@@ -63,4 +55,3 @@ CREATE TABLE site_configs (
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 )
-

@@ -25,14 +25,14 @@ func (s *OpaqueService) IsClientIDTaken(ctx context.Context, clientID string) (b
 }
 
 type OpaqueUserData struct {
-	ClientID           string
+	ClientID            string
 	EncodedCredentialID string
-	EncodedRecord      string
-	UserID             int64
-	KSFAlgorithm       string
-	KSFSalt            []byte
-	KSFParams          string
-	KSFOutputLen       int
+	EncodedRecord       string
+	UserID              int64
+	KSFAlgorithm        string
+	KSFSalt             []byte
+	KSFParams           string
+	KSFOutputLen        int
 }
 
 func (s *OpaqueService) GetUserData(ctx context.Context, clientID string) (*OpaqueUserData, error) {
@@ -47,6 +47,16 @@ func (s *OpaqueService) GetUserData(ctx context.Context, clientID string) (*Opaq
 	return &data, nil
 }
 
+func (s *OpaqueService) HasPassword(ctx context.Context, userID int64) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM opaque_user_data WHERE user_id = ?", userID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredentialID, encodedRecord string,
 	ksfAlgorithm string, ksfSalt []byte, ksfParams string, ksfOutputLen int) (int64, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -56,8 +66,8 @@ func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredent
 	defer tx.Rollback()
 
 	result, err := tx.ExecContext(ctx,
-		"INSERT INTO users (auth_method, display_name) VALUES (?, ?)",
-		"pass-opaque", clientID)
+		"INSERT INTO users (display_name) VALUES (?)",
+		clientID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert user: %w", err)
 	}
@@ -67,11 +77,10 @@ func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredent
 		return 0, fmt.Errorf("failed to get last insert id: %w", err)
 	}
 
-	_, err = tx.ExecContext(ctx,
+	if _, err := tx.ExecContext(ctx,
 		"INSERT INTO opaque_user_data (client_id, credential_id, registration_record, user_id, ksf_algorithm, ksf_salt, ksf_params, ksf_output_len) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		clientID, encodedCredentialID, encodedRecord, userID,
-		ksfAlgorithm, ksfSalt, ksfParams, ksfOutputLen)
-	if err != nil {
+		ksfAlgorithm, ksfSalt, ksfParams, ksfOutputLen); err != nil {
 		return 0, fmt.Errorf("failed to insert opaque user data: %w", err)
 	}
 
@@ -80,4 +89,16 @@ func (s *OpaqueService) CreateUser(ctx context.Context, clientID, encodedCredent
 	}
 
 	return userID, nil
+}
+
+func (s *OpaqueService) AddPasswordToUser(ctx context.Context, userID int64, clientID, encodedCredentialID, encodedRecord string,
+	ksfAlgorithm string, ksfSalt []byte, ksfParams string, ksfOutputLen int) error {
+	_, err := s.db.ExecContext(ctx,
+		"INSERT INTO opaque_user_data (client_id, credential_id, registration_record, user_id, ksf_algorithm, ksf_salt, ksf_params, ksf_output_len) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		clientID, encodedCredentialID, encodedRecord, userID,
+		ksfAlgorithm, ksfSalt, ksfParams, ksfOutputLen)
+	if err != nil {
+		return fmt.Errorf("failed to insert opaque user data: %w", err)
+	}
+	return nil
 }

@@ -14,7 +14,7 @@ import (
 func TestTOTPGenerateSecret(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	result, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)
@@ -27,7 +27,7 @@ func TestTOTPGenerateSecret(t *testing.T) {
 func TestTOTPVerifyAndEnableValidCode(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	result, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)
@@ -39,11 +39,6 @@ func TestTOTPVerifyAndEnableValidCode(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, ok)
 
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = ? AND method = 'totp' AND enabled = 1", userID).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
-
 	var enabled int
 	err = db.QueryRow("SELECT enabled FROM totp_secrets WHERE user_id = ?", userID).Scan(&enabled)
 	require.NoError(t, err)
@@ -53,7 +48,7 @@ func TestTOTPVerifyAndEnableValidCode(t *testing.T) {
 func TestTOTPVerifyAndEnableInvalidCode(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	_, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)
@@ -61,17 +56,12 @@ func TestTOTPVerifyAndEnableInvalidCode(t *testing.T) {
 	ok, err := svc.VerifyAndEnable(t.Context(), userID, "000000")
 	require.NoError(t, err)
 	assert.False(t, ok)
-
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = ? AND method = 'totp'", userID).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 0, count)
 }
 
 func TestTOTPVerifyAndEnableNoSecret(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	ok, err := svc.VerifyAndEnable(t.Context(), userID, "123456")
 	require.NoError(t, err)
@@ -81,7 +71,7 @@ func TestTOTPVerifyAndEnableNoSecret(t *testing.T) {
 func TestTOTPValidateCodeEnabled(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	result, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)
@@ -104,7 +94,7 @@ func TestTOTPValidateCodeEnabled(t *testing.T) {
 func TestTOTPValidateCodeDisabled(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	_, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)
@@ -117,7 +107,7 @@ func TestTOTPValidateCodeDisabled(t *testing.T) {
 func TestTOTPValidateCodeNotFound(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	valid, err := svc.ValidateCode(t.Context(), userID, "123456")
 	require.NoError(t, err)
@@ -127,7 +117,7 @@ func TestTOTPValidateCodeNotFound(t *testing.T) {
 func TestTOTPGenerateSecretReplace(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewTOTPService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	result1, err := svc.GenerateSecret(t.Context(), userID, "testuser", "auth")
 	require.NoError(t, err)

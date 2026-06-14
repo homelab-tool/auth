@@ -6,6 +6,8 @@ export default defineConfig({
         "pages/register": "internal/server/pages/register/page.ts",
         "pages/enroll": "internal/server/pages/register/enroll.ts",
         "pages/login-2fa": "internal/server/pages/login/2fa.ts",
+        "pages/password-setup": "internal/server/pages/profile/password-setup.ts",
+        "pages/add-passkey": "internal/server/pages/profile/add-passkey.ts",
     },
     output: {
         dir: "internal/server/pages/static/dist",

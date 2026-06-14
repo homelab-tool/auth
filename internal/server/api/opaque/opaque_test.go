@@ -292,7 +292,6 @@ func TestOpaqueLogin2FARequired(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2fa_required", resp["status"])
 	assert.NotEmpty(t, resp["session_id"])
-	assert.Equal(t, []any{"webauthn"}, resp["methods"])
 }
 
 func TestOpaqueLogin2FANotRequired(t *testing.T) {

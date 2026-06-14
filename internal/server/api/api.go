@@ -33,7 +33,7 @@ func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server, 
 		return err
 	}
 
-	webAuthnHandler, err := webauthn.NewHandler(api.Users, api.Credentials, api.JWT)
+	webAuthnHandler, err := webauthn.NewHandler(api.Users, api.Credentials, api.JWT, api.SecondFactorSvc, api.TOTP, sfHandler)
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server, 
 	siteConfigHandler := siteconfig.NewHandler(api.SiteConfigs)
 
 	opaqueHandler.SetupRoutes(e.Group("/opaque"), jwtMiddleware(api.JWT))
-	webAuthnHandler.SetupRoutes(e.Group("/webauthn"))
+	webAuthnHandler.SetupRoutes(e.Group("/webauthn"), jwtMiddleware(api.JWT))
 	siteConfigHandler.SetupRoutes(e.Group("/site-configs"), jwtMiddleware(api.JWT))
 
 	e.GET("/whoami", api.whoami, jwtMiddleware(api.JWT))

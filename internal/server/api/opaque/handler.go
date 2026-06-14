@@ -141,6 +141,11 @@ func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) 
 	e.POST("/login/start", h.loginStart)
 	e.POST("/login/finish", h.loginFinish)
 
+	pwAdd := e.Group("/password/add")
+	pwAdd.Use(jwtMiddleware)
+	pwAdd.POST("/start", h.passwordAddStart)
+	pwAdd.POST("/finish", h.passwordAddFinish)
+
 	if h.secondFactor != nil {
 		h.secondFactor.SetupRoutes(e, jwtMiddleware)
 	}
@@ -252,6 +257,137 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 	}
 
 	return c.JSON(200, map[string]string{"token": token})
+}
+
+func (h *Handler) passwordAddStart(c *echo.Context) error {
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := auth.ParseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	hasPW, err := h.opaqueService.HasPassword(c.Request().Context(), userID)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to check password")
+		return c.String(500, "server error")
+	}
+	if hasPW {
+		return c.String(400, "password already set")
+	}
+
+	clientId, payload, err := bindAndValidateOPAQUERequest(c)
+	if err != nil {
+		log.Err(err).Msg("failed to bind password add start request")
+		return c.String(400, "invalid request")
+	}
+
+	userExists, err := h.opaqueService.IsClientIDTaken(c.Request().Context(), clientId)
+	if err != nil {
+		log.Err(err).Str("clientId", clientId).Msg("failed to check for taken client id")
+		return c.String(500, "server error")
+	}
+	if userExists {
+		return c.String(409, "client id is already taken")
+	}
+
+	registrationRequest, err := h.opaqueServer.Deserialize.RegistrationRequest(payload)
+	if err != nil {
+		log.Err(err).Msg("failed to deserialize registration request")
+		return c.String(400, "invalid request")
+	}
+
+	credentialId := opaque.RandomBytes(64)
+	h.cache.SetWithTTL(clientId, credentialId, 1, time.Minute)
+	h.cache.Wait()
+
+	ksf := auth.DefaultKSF()
+	paramsJSON, err := ksf.ParamsJSON()
+	if err != nil {
+		log.Err(err).Msg("failed to marshal ksf params")
+		return c.String(500, "server error")
+	}
+
+	h.ksfCache.SetWithTTL(clientId, &cachedKSF{
+		algorithm: ksf.AlgorithmName(),
+		salt:      ksf.Salt,
+		params:    paramsJSON,
+		outputLen: ksf.OutputLen,
+	}, 1, time.Minute)
+	h.ksfCache.Wait()
+
+	registrationResponse, err := h.opaqueServer.RegistrationResponse(registrationRequest, credentialId, nil)
+	if err != nil {
+		log.Err(err).Msg("failed to generate registration response")
+		return c.String(500, "server error")
+	}
+
+	responseBytes := registrationResponse.Serialize()
+	encodedResponse := base64.RawURLEncoding.EncodeToString(responseBytes)
+
+	return c.JSON(200, map[string]any{
+		"registrationResponse": encodedResponse,
+		"ksf": map[string]any{
+			"algorithm": ksf.AlgorithmName(),
+			"salt":      base64.StdEncoding.EncodeToString(ksf.Salt),
+			"params":    paramsJSON,
+			"outputLen": ksf.OutputLen,
+		},
+	})
+}
+
+func (h *Handler) passwordAddFinish(c *echo.Context) error {
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := auth.ParseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	clientId, payload, err := bindAndValidateOPAQUERequest(c)
+	if err != nil {
+		log.Err(err).Msg("failed to bind password add finish request")
+		return c.String(400, "invalid request")
+	}
+
+	credentialId, found := h.cache.Get(clientId)
+	if !found || credentialId == nil {
+		return c.String(400, "invalid request")
+	}
+
+	ksfCached, found := h.ksfCache.Get(clientId)
+	if !found || ksfCached == nil {
+		return c.String(400, "invalid request")
+	}
+
+	registrationRecord, err := h.opaqueServer.Deserialize.RegistrationRecord(payload)
+	if err != nil {
+		log.Err(err).Msg("failed to deserialize registration record")
+		return c.String(400, "invalid request")
+	}
+
+	recordBytes := registrationRecord.Serialize()
+	encodedRecord := base64.RawURLEncoding.EncodeToString(recordBytes)
+	encodedCredentialId := base64.RawURLEncoding.EncodeToString(credentialId)
+
+	if err := h.opaqueService.AddPasswordToUser(c.Request().Context(), userID, clientId, encodedCredentialId, encodedRecord,
+		ksfCached.algorithm, ksfCached.salt, ksfCached.params, ksfCached.outputLen); err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to add password")
+		return c.String(500, "server error")
+	}
+
+	h.cache.Del(clientId)
+	h.ksfCache.Del(clientId)
+
+	return c.JSON(200, map[string]string{"status": "ok"})
 }
 
 func (h *Handler) loginStart(c *echo.Context) error {
@@ -382,7 +518,6 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 			return c.JSON(200, map[string]any{
 				"status":     "2fa_required",
 				"session_id": result.SessionID,
-				"methods":    result.Methods,
 			})
 		}
 	}

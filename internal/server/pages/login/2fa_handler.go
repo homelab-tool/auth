@@ -2,7 +2,6 @@ package login
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
@@ -21,14 +20,13 @@ func NewTwoFAHandler(sf *secondfactor.Handler, jwt *auth.JWTService) *TwoFAHandl
 
 func (h *TwoFAHandler) Init2FA(c *echo.Context) error {
 	sessionID := c.QueryParam("session_id")
-	methodsParam := c.QueryParam("methods")
 	if sessionID == "" {
 		return c.String(400, "missing session_id")
 	}
 
-	var methods []string
-	if methodsParam != "" {
-		methods = strings.Split(methodsParam, ",")
+	methods, err := h.secondFactor.GetPendingMethods(sessionID)
+	if err != nil {
+		return c.String(400, "invalid session")
 	}
 
 	return Login2FAChallenge(sessionID, methods).Render(c.Request().Context(), c.Response())

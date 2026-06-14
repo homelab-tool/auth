@@ -12,9 +12,9 @@ import (
 	"github.com/homelab-tool/auth/internal/service"
 )
 
-func insertTestUser(t *testing.T, db *sql.DB, authMethod, displayName string) int64 {
+func insertTestUser(t *testing.T, db *sql.DB, displayName string) int64 {
 	t.Helper()
-	result, err := db.Exec("INSERT INTO users (auth_method, display_name) VALUES (?, ?)", authMethod, displayName)
+	result, err := db.Exec("INSERT INTO users (display_name) VALUES (?)", displayName)
 	require.NoError(t, err)
 	id, err := result.LastInsertId()
 	require.NoError(t, err)
@@ -24,7 +24,7 @@ func insertTestUser(t *testing.T, db *sql.DB, authMethod, displayName string) in
 func TestCredentialServicePersist(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "webauthn", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	cred := &webauthn.Credential{
 		ID:              []byte("credential-id-1"),
@@ -32,7 +32,7 @@ func TestCredentialServicePersist(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), userID, cred)
+	err := svc.Persist(context.Background(), userID, cred, "login")
 	require.NoError(t, err)
 
 	var count int
@@ -44,7 +44,7 @@ func TestCredentialServicePersist(t *testing.T) {
 func TestCredentialServicePersistDuplicateCredentialID(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "webauthn", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	cred := &webauthn.Credential{
 		ID:              []byte("same-cred-id"),
@@ -52,10 +52,10 @@ func TestCredentialServicePersistDuplicateCredentialID(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), userID, cred)
+	err := svc.Persist(context.Background(), userID, cred, "login")
 	require.NoError(t, err)
 
-	err = svc.Persist(context.Background(), userID, cred)
+	err = svc.Persist(context.Background(), userID, cred, "login")
 	assert.ErrorContains(t, err, "UNIQUE constraint")
 }
 
@@ -69,21 +69,21 @@ func TestCredentialServicePersistMissingUser(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), 999, cred)
+	err := svc.Persist(context.Background(), 999, cred, "login")
 	assert.ErrorContains(t, err, "FOREIGN KEY constraint")
 }
 
 func TestCredentialServiceUpdate(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "webauthn", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	cred := &webauthn.Credential{
 		ID:              []byte("cred-id"),
 		PublicKey:       []byte("pubkey"),
 		AttestationType: "none",
 	}
-	err := svc.Persist(context.Background(), userID, cred)
+	err := svc.Persist(context.Background(), userID, cred, "login")
 	require.NoError(t, err)
 
 	cred.Authenticator.SignCount = 5
@@ -99,7 +99,7 @@ func TestCredentialServiceUpdate(t *testing.T) {
 func TestCredentialServiceUpdateStaleSignCount(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "webauthn", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
 	cred := &webauthn.Credential{
 		ID:              []byte("cred-id"),
@@ -107,7 +107,7 @@ func TestCredentialServiceUpdateStaleSignCount(t *testing.T) {
 		AttestationType: "none",
 	}
 	cred.Authenticator.SignCount = 10
-	err := svc.Persist(context.Background(), userID, cred)
+	err := svc.Persist(context.Background(), userID, cred, "login")
 	require.NoError(t, err)
 
 	cred.Authenticator.SignCount = 5
@@ -120,28 +120,37 @@ func TestCredentialServiceUpdateStaleSignCount(t *testing.T) {
 	assert.Equal(t, int64(10), signCount, "sign count should not decrease")
 }
 
-func TestCredentialServiceEnableSecondFactor(t *testing.T) {
+func TestCredentialServiceGetPurpose(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
-	err := svc.EnableSecondFactor(context.Background(), userID)
+	cred := &webauthn.Credential{
+		ID:              []byte("cred-id"),
+		PublicKey:       []byte("pubkey"),
+		AttestationType: "none",
+	}
+	err := svc.Persist(context.Background(), userID, cred, "login")
 	require.NoError(t, err)
 
-	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = ? AND method = 'webauthn' AND enabled = 1", userID).Scan(&count)
+	purpose, err := svc.GetPurpose(context.Background(), cred.ID)
 	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	assert.Equal(t, "login", purpose)
 }
 
-func TestCredentialServiceEnableSecondFactorIdempotent(t *testing.T) {
+func TestCredentialServiceListBy2FAPurpose(t *testing.T) {
 	db := newTestDB(t)
 	svc := service.NewCredentialService(db)
-	userID := insertTestUser(t, db, "pass-opaque", "testuser")
+	userID := insertTestUser(t, db, "testuser")
 
-	err := svc.EnableSecondFactor(context.Background(), userID)
-	require.NoError(t, err)
+	cred1 := &webauthn.Credential{ID: []byte("cred-1"), PublicKey: []byte("pk1"), AttestationType: "none"}
+	cred2 := &webauthn.Credential{ID: []byte("cred-2"), PublicKey: []byte("pk2"), AttestationType: "none"}
 
-	err = svc.EnableSecondFactor(context.Background(), userID)
+	require.NoError(t, svc.Persist(context.Background(), userID, cred1, "login"))
+	require.NoError(t, svc.Persist(context.Background(), userID, cred2, "2fa"))
+
+	creds, err := svc.ListBy2FAPurpose(context.Background(), userID)
 	require.NoError(t, err)
+	assert.Len(t, creds, 1)
+	assert.Equal(t, "2fa", creds[0].Purpose)
 }

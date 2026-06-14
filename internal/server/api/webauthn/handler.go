@@ -11,6 +11,7 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
+	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/labstack/echo/v5/middleware"
@@ -20,11 +21,13 @@ import (
 const (
 	maxDisplayNameLen = 256
 	maxBodySize       = 1 << 20
+	maxPasskeys       = 5
 )
 
 type Session struct {
 	sessionData *webauthn.SessionData
 	userID      int64
+	purpose     string
 }
 
 type Handler struct {
@@ -33,9 +36,14 @@ type Handler struct {
 	cache             *ristretto.Cache[string, *Session]
 	webAuthn          *auth.WebAuthnService
 	jwtService        *auth.JWTService
+	secondFactorSvc   service.SecondFactorService
+	totpService       *service.TOTPService
+	secondFactor      *secondfactor.Handler
 }
 
-func NewHandler(userService *service.UserService, credentialService *service.CredentialService, jwtService *auth.JWTService) (*Handler, error) {
+func NewHandler(userService *service.UserService, credentialService *service.CredentialService,
+	jwtService *auth.JWTService, secondFactorSvc service.SecondFactorService,
+	totpService *service.TOTPService, secondFactor *secondfactor.Handler) (*Handler, error) {
 	cache, err := cacheutil.NewCache[*Session]()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webauthn cache: %w", err)
@@ -47,10 +55,13 @@ func NewHandler(userService *service.UserService, credentialService *service.Cre
 		cache:             cache,
 		webAuthn:          nil,
 		jwtService:        jwtService,
+		secondFactorSvc:   secondFactorSvc,
+		totpService:       totpService,
+		secondFactor:      secondFactor,
 	}, nil
 }
 
-func (h *Handler) SetupRoutes(e *echo.Group) {
+func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
 	webAuthn, err := auth.NewWebAuthnService()
 	if err != nil {
 		log.Err(err).Msg("failed to create webauthn service")
@@ -70,10 +81,19 @@ func (h *Handler) SetupRoutes(e *echo.Group) {
 	e.POST("/register/finish", h.registerFinish)
 	e.POST("/login/start", h.loginStart)
 	e.POST("/login/finish", h.loginFinish)
+
+	creds := e.Group("/credentials")
+	creds.Use(jwtMiddleware)
+	creds.POST("/add/start", h.addStart)
+	creds.POST("/add/finish", h.addFinish)
 }
 
 type registerStartRequest struct {
 	DisplayName string `json:"displayName"`
+}
+
+type addStartRequest struct {
+	Purpose string `json:"purpose"`
 }
 
 func validateDisplayName(name string) error {
@@ -84,6 +104,10 @@ func validateDisplayName(name string) error {
 		return fmt.Errorf("display name too long: %d bytes", len(name))
 	}
 	return nil
+}
+
+func isValidPurpose(purpose string) bool {
+	return purpose == "login" || purpose == "2fa" || purpose == "login,2fa"
 }
 
 func (h *Handler) registerStart(c *echo.Context) error {
@@ -98,7 +122,7 @@ func (h *Handler) registerStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	userID, err := h.userService.Create(c.Request().Context(), "webauthn", request.DisplayName)
+	userID, err := h.userService.Create(c.Request().Context(), request.DisplayName)
 	if err != nil {
 		log.Err(err).Msg("failed to insert user")
 		return c.String(500, "server error")
@@ -171,7 +195,7 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, "login"); err != nil {
 		log.Err(err).Msg("failed to persist credential")
 		h.cache.Del(challenge)
 
@@ -260,6 +284,55 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 
 	webAuthnUser := resolvedUser.(*auth.WebAuthnUser)
 
+	purpose, err := h.credentialService.GetPurpose(c.Request().Context(), validatedCredential.ID)
+	if err != nil {
+		log.Err(err).Msg("failed to get credential purpose")
+		return c.String(500, "server error")
+	}
+
+	if purpose == "2fa" {
+		return c.String(401, "invalid credentials")
+	}
+
+	var methods []string
+
+	if purpose == "login" {
+		totpOK, err := h.totpService.HasEnabled(c.Request().Context(), webAuthnUser.ID)
+		if err != nil {
+			log.Err(err).Int64("userID", webAuthnUser.ID).Msg("failed to check totp")
+			return c.String(500, "server error")
+		}
+		if totpOK {
+			methods = append(methods, "totp")
+		}
+
+		other2faCreds, err := h.credentialService.ListBy2FAPurpose(c.Request().Context(), webAuthnUser.ID)
+		if err != nil {
+			log.Err(err).Int64("userID", webAuthnUser.ID).Msg("failed to list 2fa credentials")
+			return c.String(500, "server error")
+		}
+
+		for _, c2 := range other2faCreds {
+			if c2.ID != int64(validatedCredential.Authenticator.SignCount) {
+				methods = append(methods, "webauthn")
+				break
+			}
+		}
+	}
+
+	if len(methods) > 0 {
+		result, err := h.secondFactor.CreatePendingSession(webAuthnUser.ID, methods)
+		if err != nil {
+			log.Err(err).Int64("userID", webAuthnUser.ID).Msg("failed to create 2fa session")
+			return c.String(500, "server error")
+		}
+
+		return c.JSON(200, map[string]any{
+				"status":     "2fa_required",
+				"session_id": result.SessionID,
+			})
+	}
+
 	token, err := h.jwtService.GenerateToken(webAuthnUser.ID)
 	if err != nil {
 		log.Err(err).Msg("failed to generate jwt")
@@ -267,4 +340,118 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 	}
 
 	return c.JSON(200, map[string]string{"token": token})
+}
+
+func (h *Handler) addStart(c *echo.Context) error {
+	var request addStartRequest
+	if err := c.Bind(&request); err != nil {
+		log.Err(err).Msg("failed to bind add webauthn start request")
+		return c.String(400, "invalid request")
+	}
+
+	if !isValidPurpose(request.Purpose) {
+		return c.String(400, "invalid purpose")
+	}
+
+	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
+	if !ok {
+		return c.String(401, "unauthorized")
+	}
+
+	userID, err := auth.ParseUserID(claims.Subject)
+	if err != nil {
+		log.Err(err).Msg("failed to parse user id from claims")
+		return c.String(500, "server error")
+	}
+
+	count, err := h.credentialService.Count(c.Request().Context(), userID)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to count credentials")
+		return c.String(500, "server error")
+	}
+	if count >= maxPasskeys {
+		return c.String(400, "maximum number of passkeys reached")
+	}
+
+	displayName, err := h.userService.GetDisplayName(c.Request().Context(), userID)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to query display name")
+		return c.String(500, "server error")
+	}
+
+	user := &auth.WebAuthnUser{
+		ID:          userID,
+		DisplayName: displayName,
+	}
+
+	opts := []webauthn.RegistrationOption{
+		webauthn.WithExtensions(protocol.AuthenticationExtensions{"credProps": true}),
+	}
+	if request.Purpose == "login" || request.Purpose == "login,2fa" {
+		opts = append(opts, webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired))
+	}
+
+	creation, sessionData, err := h.webAuthn.WebAuthn.BeginRegistration(user, opts...)
+	if err != nil {
+		log.Err(err).Msg("failed to begin webauthn registration")
+		return c.String(500, "server error")
+	}
+
+	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID, purpose: request.Purpose}, 1, 2*time.Minute)
+	h.cache.Wait()
+
+	return c.JSON(200, creation)
+}
+
+func (h *Handler) addFinish(c *echo.Context) error {
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxBodySize))
+	if err != nil {
+		log.Err(err).Msg("failed to read request body")
+		return c.String(400, "invalid request")
+	}
+
+	parsedResponse, err := protocol.ParseCredentialCreationResponseBytes(body)
+	if err != nil {
+		log.Err(err).Msg("failed to parse credential creation response")
+		return c.String(400, "invalid request")
+	}
+
+	challenge := parsedResponse.Response.CollectedClientData.Challenge
+	if challenge == "" {
+		return c.String(400, "invalid request")
+	}
+
+	s, found := h.cache.Get(challenge)
+	if !found || s == nil || s.sessionData == nil {
+		return c.String(400, "invalid request")
+	}
+
+	user, err := h.userService.LoadWebAuthnUser(c.Request().Context(), s.userID)
+	if err != nil {
+		log.Err(err).Int64("userID", s.userID).Msg("failed to load user")
+		h.cache.Del(challenge)
+		return c.String(500, "server error")
+	}
+
+	credential, err := h.webAuthn.WebAuthn.CreateCredential(user, *s.sessionData, parsedResponse)
+	if err != nil {
+		log.Err(err).Msg("failed to create credential")
+		h.cache.Del(challenge)
+		return c.String(400, "invalid request")
+	}
+
+	purpose := s.purpose
+	if purpose == "" {
+		purpose = "login"
+	}
+
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, purpose); err != nil {
+		log.Err(err).Msg("failed to persist credential")
+		h.cache.Del(challenge)
+		return c.String(500, "server error")
+	}
+
+	h.cache.Del(challenge)
+
+	return c.JSON(200, map[string]string{"status": "ok"})
 }

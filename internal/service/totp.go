@@ -63,13 +63,6 @@ func (s *TOTPService) VerifyAndEnable(ctx context.Context, userID int64, code st
 		return false, fmt.Errorf("failed to enable totp secret: %w", err)
 	}
 
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO user_second_factors (user_id, method, enabled) VALUES (?, 'totp', 1)
-		 ON CONFLICT(user_id, method) DO UPDATE SET enabled = 1`, userID)
-	if err != nil {
-		return false, fmt.Errorf("failed to enable totp second factor: %w", err)
-	}
-
 	return true, nil
 }
 
@@ -87,3 +80,12 @@ func (s *TOTPService) ValidateCode(ctx context.Context, userID int64, code strin
 	return totp.Validate(code, secret), nil
 }
 
+func (s *TOTPService) HasEnabled(ctx context.Context, userID int64) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM totp_secrets WHERE user_id = ? AND enabled = 1", userID).Scan(&count)
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}

@@ -13,7 +13,6 @@ import (
 
 type User struct {
 	ID          int64
-	AuthMethod  string
 	DisplayName string
 	CreatedAt   string
 }
@@ -26,10 +25,10 @@ func NewUserService(db *sql.DB) *UserService {
 	return &UserService{db: db}
 }
 
-func (s *UserService) Create(ctx context.Context, authMethod, displayName string) (int64, error) {
+func (s *UserService) Create(ctx context.Context, displayName string) (int64, error) {
 	result, err := s.db.ExecContext(ctx,
-		"INSERT INTO users (auth_method, display_name) VALUES (?, ?)",
-		authMethod, displayName)
+		"INSERT INTO users (display_name) VALUES (?)",
+		displayName)
 	if err != nil {
 		return 0, fmt.Errorf("failed to insert user: %w", err)
 	}
@@ -59,12 +58,22 @@ func (s *UserService) GetDisplayName(ctx context.Context, userID int64) (string,
 func (s *UserService) GetUser(ctx context.Context, userID int64) (*User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx,
-		"SELECT id, auth_method, display_name, created_at FROM users WHERE id = ?", userID).
-		Scan(&u.ID, &u.AuthMethod, &u.DisplayName, &u.CreatedAt)
+		"SELECT id, display_name, created_at FROM users WHERE id = ?", userID).
+		Scan(&u.ID, &u.DisplayName, &u.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query user: %w", err)
 	}
 	return &u, nil
+}
+
+func (s *UserService) HasPassword(ctx context.Context, userID int64) (bool, error) {
+	var count int
+	err := s.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM opaque_user_data WHERE user_id = ?", userID).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("failed to check password: %w", err)
+	}
+	return count > 0, nil
 }
 
 func (s *UserService) LoadWebAuthnUser(ctx context.Context, userID int64) (*auth.WebAuthnUser, error) {

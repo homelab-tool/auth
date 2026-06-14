@@ -153,10 +153,10 @@ func CreateApp() (*App, error) {
 
 	e.GET("/login", login.PageHandler)
 	e.GET("/register", register.PageHandler)
-	e.GET("/profile", profile.PageHandler(svcs.JWT, svcs.Users, svcs.SecondFactor))
+	e.GET("/profile", profile.PageHandler(svcs.JWT, svcs.Users, svcs.SecondFactor, svcs.Credentials))
 	e.DELETE("/profile/2fa/:method", profile.Disable2FAHandler(svcs.JWT, svcs.SecondFactor))
 
-	enrollHandler := register.NewEnrollmentHandler(svcs.JWT, svcs.Users, svcs.TOTP, svcs.SecondFactor)
+	enrollHandler := register.NewEnrollmentHandler(svcs.JWT, svcs.Users, svcs.TOTP, svcs.SecondFactor, svcs.Credentials)
 	e.GET("/register/2fa", enrollHandler.PageHandler)
 	e.GET("/register/2fa/totp", enrollHandler.HandleTOTPSetupPage)
 	e.GET("/register/2fa/webauthn", enrollHandler.HandleWebAuthnSetupPage)
@@ -169,6 +169,11 @@ func CreateApp() (*App, error) {
 	twoFAHandler := login.NewTwoFAHandler(sfHandler, svcs.JWT)
 	e.GET("/login/2fa/init", twoFAHandler.Init2FA)
 	e.POST("/login/2fa/totp", twoFAHandler.VerifyTOTP)
+
+	profileGroup := e.Group("/profile")
+	profileGroup.GET("/password", profile.PasswordPageHandler(svcs.JWT, svcs.Users, svcs.Opaque))
+	profileGroup.GET("/passkey/add", profile.AddPasskeyPageHandler(svcs.JWT, svcs.Credentials))
+	profileGroup.DELETE("/passkey/:id", profile.DeletePasskeyHandler(svcs.JWT, svcs.Credentials))
 
 	app := &App{
 		Router: e,

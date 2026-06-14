@@ -62,9 +62,9 @@ func TestSecondFactorRegisterFullFlow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "ok", finishResp["status"])
 
-	// Verify 2FA is enabled in DB
+	// Verify 2FA credential purpose is set in DB
 	var count int
-	err = db.QueryRow("SELECT COUNT(*) FROM user_second_factors WHERE user_id = 1 AND method = 'webauthn' AND enabled = 1").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = 1 AND purpose = '2fa'").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
