@@ -15,7 +15,7 @@ test("register, logout and login with passkey", async ({ page, app, context }) =
         await register.displayName.fill("Passkey User");
         await register.webauthnSubmitButton.click();
         await expect(register.enrollmentSection).toBeVisible();
-        await register.skipLink.click();
+        await register.continueToProfileLink.click();
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
         await expect(profile.heading).toHaveText("Profile");
         await expect(profile.detailItems.nth(0)).toHaveText("Passkey User");

@@ -49,15 +49,21 @@ async function handleWebAuthnSetup() {
         return;
     }
 
+    const btn = document.getElementById("webauthn-2fa-setup");
+    if (!btn) return;
+
+    const redirect = btn.getAttribute("data-redirect-on-success");
+    if (redirect) {
+        window.location.href = redirect;
+        return;
+    }
+
     const status = document.getElementById("webauthn-2fa-status");
     if (status) {
         status.innerHTML =
             '<strong style="color: green;">✓ Security key set up successfully!</strong>';
     }
-    const btn = document.getElementById("webauthn-2fa-setup");
-    if (btn) {
-        btn.style.display = "none";
-    }
+    btn.style.display = "none";
 }
 
 async function init() {

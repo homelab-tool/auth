@@ -38,7 +38,7 @@ export class RegisterPage {
         return this.page.locator("#enrollment-section");
     }
 
-    get skipLink() {
-        return this.page.locator("a:has-text('Skip for now')");
+    get continueToProfileLink() {
+        return this.page.locator('a[href="/profile"]');
     }
 }

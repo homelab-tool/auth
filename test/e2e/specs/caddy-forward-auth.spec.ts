@@ -10,7 +10,7 @@ test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
     await register.confirm.fill("test-password");
     await register.opaqueSubmitButton.click();
     await expect(register.enrollmentSection).toBeVisible();
-    await register.skipLink.click();
+    await register.continueToProfileLink.click();
     await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
     const cookies = await page.context().cookies();

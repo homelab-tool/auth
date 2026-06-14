@@ -18,7 +18,19 @@ export class ProfilePage {
         return this.page.locator("#profile-2fa");
     }
 
+    get totpSetupLink() {
+        return this.page.locator('a[href="/register/2fa/totp"]');
+    }
+
+    get webauthnSetupLink() {
+        return this.page.locator('a[href="/register/2fa/webauthn"]');
+    }
+
     get logoutButton() {
         return this.page.locator("button:has-text('Log Out')");
+    }
+
+    async goto() {
+        await this.page.goto(`${this.baseUrl}/profile`);
     }
 }

@@ -37,7 +37,7 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app }
 
     await test.step("go to profile and verify TOTP enabled", async () => {
         const register = new RegisterPage(page, app.authUrl);
-        await register.skipLink.click();
+        await register.continueToProfileLink.click();
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
         await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
@@ -81,5 +81,24 @@ test("enroll, verify TOTP required on login, then disable", async ({ page, app }
 
         await page.reload();
         await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Not set up");
+    });
+
+    await test.step("enable TOTP again through profile page", async () => {
+        const profile = new ProfilePage(page, app.authUrl);
+        await profile.totpSetupLink.click();
+        await expect(page).toHaveURL(`${app.authUrl}/register/2fa/totp`);
+
+        const enrollment = new TwoFAEnrollmentPage(page, app.authUrl);
+        await expect(enrollment.secretCode).toBeVisible();
+        secret = await enrollment.secretCode.textContent();
+        expect(secret).toBeTruthy();
+
+        const code = await generateTOTP({ secret: secret! });
+        expect(code).toBeTruthy();
+        await enrollment.totpInput.fill(code);
+        await enrollment.verifyButton.click();
+
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
+        await expect(new ProfilePage(page, app.authUrl).section2FA).toContainText("Enabled");
     });
 });

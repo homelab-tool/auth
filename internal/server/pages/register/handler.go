@@ -13,13 +13,14 @@ func PageHandler(c *echo.Context) error {
 }
 
 type EnrollmentHandler struct {
-	jwt   *auth.JWTService
-	users *service.UserService
-	totp  *service.TOTPService
+	jwt          *auth.JWTService
+	users        *service.UserService
+	totp         *service.TOTPService
+	secondFactor service.SecondFactorService
 }
 
-func NewEnrollmentHandler(jwt *auth.JWTService, users *service.UserService, totp *service.TOTPService) *EnrollmentHandler {
-	return &EnrollmentHandler{jwt: jwt, users: users, totp: totp}
+func NewEnrollmentHandler(jwt *auth.JWTService, users *service.UserService, totp *service.TOTPService, secondFactor service.SecondFactorService) *EnrollmentHandler {
+	return &EnrollmentHandler{jwt: jwt, users: users, totp: totp, secondFactor: secondFactor}
 }
 
 func (h *EnrollmentHandler) PageHandler(c *echo.Context) error {
@@ -48,7 +49,7 @@ func (h *EnrollmentHandler) HandleTOTPGenerate(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	return TOTPSetupForm(result.Secret, result.URI).Render(c.Request().Context(), c.Response())
+	return TOTPSetupForm(result.Secret, result.URI, "/register/2fa/totp/verify").Render(c.Request().Context(), c.Response())
 }
 
 func (h *EnrollmentHandler) HandleTOTPVerify(c *echo.Context) error {
@@ -72,4 +73,78 @@ func (h *EnrollmentHandler) HandleTOTPVerify(c *echo.Context) error {
 	}
 
 	return TOTPSuccess().Render(c.Request().Context(), c.Response())
+}
+
+func (h *EnrollmentHandler) HandleTOTPVerifyAndRedirect(c *echo.Context) error {
+	userID, err := layout.UserIDFromCookie(c, h.jwt)
+	if err != nil {
+		return c.Redirect(302, "/login")
+	}
+
+	code := c.Request().FormValue("code")
+	if code == "" {
+		return c.String(400, "Code is required")
+	}
+
+	ok, err := h.totp.VerifyAndEnable(c.Request().Context(), userID, code)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to verify totp")
+		return c.String(500, "server error")
+	}
+	if !ok {
+		return c.String(400, "Invalid code")
+	}
+
+	c.Response().Header().Set("HX-Redirect", "/profile")
+	return c.NoContent(200)
+}
+
+func (h *EnrollmentHandler) HandleTOTPSetupPage(c *echo.Context) error {
+	userID, err := layout.UserIDFromCookie(c, h.jwt)
+	if err != nil {
+		return c.Redirect(302, "/login")
+	}
+
+	methods, err := h.secondFactor.Methods(userID)
+	if err != nil {
+		return c.String(500, "server error")
+	}
+	for _, m := range methods {
+		if m == "totp" {
+			return c.Redirect(302, "/profile")
+		}
+	}
+
+	displayName, err := h.users.GetDisplayName(c.Request().Context(), userID)
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to query display name for totp")
+		return c.String(500, "server error")
+	}
+
+	result, err := h.totp.GenerateSecret(c.Request().Context(), userID, displayName, "auth")
+	if err != nil {
+		log.Err(err).Int64("userID", userID).Msg("failed to generate totp secret")
+		return c.String(500, "server error")
+	}
+
+	return TOTPSetupPage(result.Secret, result.URI).Render(c.Request().Context(), c.Response())
+}
+
+func (h *EnrollmentHandler) HandleWebAuthnSetupPage(c *echo.Context) error {
+	userID, err := layout.UserIDFromCookie(c, h.jwt)
+	if err != nil {
+		return c.Redirect(302, "/login")
+	}
+
+	methods, err := h.secondFactor.Methods(userID)
+	if err != nil {
+		return c.String(500, "server error")
+	}
+	for _, m := range methods {
+		if m == "webauthn" {
+			return c.Redirect(302, "/profile")
+		}
+	}
+
+	return WebAuthnSetupPage().Render(c.Request().Context(), c.Response())
 }

@@ -28,7 +28,7 @@ e2e-ui: e2e-build
 templ-gen:
 	go tool templ generate
 
-copy-htmx:
+copy-htmx: js-build
 	cp node_modules/htmx.org/dist/htmx.min.js \
 		internal/server/pages/static/dist/htmx.min.js
 

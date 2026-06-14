@@ -1,5 +1,30 @@
 package register
 
+import (
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+)
+
+templ TOTPSetupPage(secret string, uri string) {
+	@layout.Page("Set Up Authenticator App") {
+		@TOTPSetupForm(secret, uri, "/register/2fa/totp/verify-redirect")
+		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<script type="module" src="/static/pages/enroll.js"></script>
+	}
+}
+
+templ WebAuthnSetupPage() {
+	@layout.Page("Set Up Security Key") {
+		<h1>Set Up Security Key</h1>
+		<p>Click the button below to register your security key or platform authenticator (e.g. Touch ID, Windows Hello).</p>
+		<div id="webauthn-section">
+			<button id="webauthn-2fa-setup" type="button" data-redirect-on-success="/profile">Set Up Security Key</button>
+			<div id="webauthn-2fa-status"></div>
+		</div>
+		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<script type="module" src="/static/pages/enroll.js"></script>
+	}
+}
+
 templ EnrollmentPage() {
 	<h1>Set Up Two-Factor Authentication</h1>
 	<p>Add an extra layer of security to your account. You can set up one or both methods.</p>
@@ -19,19 +44,19 @@ templ EnrollmentPage() {
 			<div id="webauthn-2fa-status"></div>
 		</div>
 		<hr/>
-		<a href="/profile" role="button">Skip for now</a>
+		<a href="/profile" role="button">Continue to profile</a>
 	</div>
 	<script type="module" src="/static/pages/enroll.js"></script>
 }
 
-templ TOTPSetupForm(secret string, uri string) {
+templ TOTPSetupForm(secret string, uri string, verifyEndpoint string) {
 	<div id="totp-section">
 		<h2>Authenticator App (TOTP)</h2>
 		<p>Scan this code or enter the secret manually in your authenticator app:</p>
 		<div id="totp-qr"></div>
 		<p><code>{ secret }</code></p>
-		<p><a id="totp-uri" href={ uri } target="_blank">{ uri }</a></p>
-		<form hx-post="/register/2fa/totp/verify" hx-target="#totp-section" hx-swap="outerHTML">
+		<p><a id="totp-uri" href={ templ.SafeURL(uri) } target="_blank">{ uri }</a></p>
+		<form hx-post={ verifyEndpoint } hx-target="#totp-section" hx-swap="outerHTML">
 			<div>
 				<label for="totp-code">Verification code</label>
 				<input type="text" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" required/>

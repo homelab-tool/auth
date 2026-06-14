@@ -26,35 +26,39 @@ templ Page(data *ProfileData) {
 			<dd>{ data.User.CreatedAt }</dd>
 		</dl>
 		<hr/>
-		<section id="profile-2fa">
-			<h2>Two-Factor Authentication</h2>
-			<dl>
-				<dt>Authenticator App (TOTP)</dt>
-				<dd>
-					if data.HasTOTP {
-						<span style="color: green;">&#10003; Enabled</span>
-						<button hx-delete="/api/opaque/register/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
-					} else {
-						<span>Not set up</span>
-						<a href="/register/2fa" role="button">Set up</a>
-					}
-				</dd>
-				<dt>Security Key (WebAuthn)</dt>
-				<dd>
-					if data.HasWebAuthn {
-						<span style="color: green;">&#10003; Enabled</span>
-						<button hx-delete="/api/opaque/register/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable WebAuthn 2FA?">Disable</button>
-					} else {
-						<span>Not set up</span>
-						<a href="/register/2fa" role="button">Set up</a>
-					}
-				</dd>
-			</dl>
-		</section>
+		@TwoFASection(data)
 		<form action="/auth/logout" method="post">
 			<button type="submit">Log Out</button>
 		</form>
 	}
+}
+
+templ TwoFASection(data *ProfileData) {
+	<section id="profile-2fa">
+		<h2>Two-Factor Authentication</h2>
+		<dl>
+			<dt>Authenticator App (TOTP)</dt>
+			<dd>
+				if data.HasTOTP {
+					<span style="color: green;">&#10003; Enabled</span>
+					<button hx-delete="/profile/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
+				} else {
+					<span>Not set up</span>
+					<a href="/register/2fa/totp" role="button">Set up</a>
+				}
+			</dd>
+			<dt>Security Key (WebAuthn)</dt>
+			<dd>
+				if data.HasWebAuthn {
+					<span style="color: green;">&#10003; Enabled</span>
+					<button hx-delete="/profile/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable WebAuthn 2FA?">Disable</button>
+				} else {
+					<span>Not set up</span>
+					<a href="/register/2fa/webauthn" role="button">Set up</a>
+				}
+				</dd>
+			</dl>
+	</section>
 }
 
 
