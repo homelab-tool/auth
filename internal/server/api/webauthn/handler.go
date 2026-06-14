@@ -28,6 +28,7 @@ type Session struct {
 	sessionData *webauthn.SessionData
 	userID      int64
 	purpose     string
+	name        string
 }
 
 type Handler struct {
@@ -94,6 +95,7 @@ type registerStartRequest struct {
 
 type addStartRequest struct {
 	Purpose string `json:"purpose"`
+	Name    string `json:"name"`
 }
 
 func validateDisplayName(name string) error {
@@ -195,7 +197,7 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, "login"); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, "login", ""); err != nil {
 		log.Err(err).Msg("failed to persist credential")
 		h.cache.Del(challenge)
 
@@ -397,7 +399,7 @@ func (h *Handler) addStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID, purpose: request.Purpose}, 1, 2*time.Minute)
+	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID, purpose: request.Purpose, name: request.Name}, 1, 2*time.Minute)
 	h.cache.Wait()
 
 	return c.JSON(200, creation)
@@ -445,7 +447,7 @@ func (h *Handler) addFinish(c *echo.Context) error {
 		purpose = "login"
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, purpose); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, purpose, s.name); err != nil {
 		log.Err(err).Msg("failed to persist credential")
 		h.cache.Del(challenge)
 		return c.String(500, "server error")

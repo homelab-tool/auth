@@ -24,7 +24,7 @@ func NewCredentialService(db *sql.DB) *CredentialService {
 	return &CredentialService{db: db}
 }
 
-func (s *CredentialService) Persist(ctx context.Context, userID int64, credential *webauthn.Credential, purpose string) error {
+func (s *CredentialService) Persist(ctx context.Context, userID int64, credential *webauthn.Credential, purpose, name string) error {
 	transportStrs := make([]string, len(credential.Transport))
 	for i, t := range credential.Transport {
 		transportStrs[i] = string(t)
@@ -34,8 +34,8 @@ func (s *CredentialService) Persist(ctx context.Context, userID int64, credentia
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO webauthn_credentials
 		 (user_id, credential_id, public_key, attestation_type, transport, aaguid,
-		  sign_count, clone_warning, backup_eligible, backup_state, purpose)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		  sign_count, clone_warning, backup_eligible, backup_state, purpose, name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		userID,
 		credential.ID,
 		credential.PublicKey,
@@ -47,6 +47,7 @@ func (s *CredentialService) Persist(ctx context.Context, userID int64, credentia
 		credential.Flags.BackupEligible,
 		credential.Flags.BackupState,
 		purpose,
+		name,
 	)
 	return err
 }

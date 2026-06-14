@@ -305,7 +305,7 @@ func (h *Handler) register2FAFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), userID, credential, "2fa"); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), userID, credential, "2fa", ""); err != nil {
 		log.Err(err).Msg("failed to persist credential for 2fa")
 		h.webauthn2FA.Del(challenge)
 		return c.String(500, "server error")

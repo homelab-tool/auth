@@ -59,9 +59,11 @@ for (const c of cases) {
                 await page.locator('a[href="/profile/passkey/add"]').click();
                 await expect(page).toHaveURL(`${app.authUrl}/profile/passkey/add`);
 
+                await page.locator("#passkey-name").fill("My YubiKey");
                 await page.locator("#passkey-purpose").selectOption("login");
                 await page.locator("#add-passkey-form button[type='submit']").click();
                 await expect(page).toHaveURL(`${app.authUrl}/profile`);
+                await expect(page.locator("#profile-passkeys")).toContainText("My YubiKey");
                 await expect(page.locator("#profile-passkeys")).toContainText("Login");
             }
         });

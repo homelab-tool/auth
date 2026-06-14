@@ -15,7 +15,7 @@ func TestDefaultSecondFactorRequiredWithWebAuthn(t *testing.T) {
 	userID := insertTestUser(t, db, "testuser")
 
 	_, err := db.Exec(
-		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, attestation_type, purpose) VALUES (?, ?, ?, ?, '2fa')",
+		"INSERT INTO webauthn_credentials (user_id, credential_id, public_key, attestation_type, transport, sign_count, clone_warning, backup_eligible, backup_state, purpose, name) VALUES (?, ?, ?, ?, '', 0, 0, 0, 0, '2fa', '')",
 		userID, []byte("cred-1"), []byte("pk"), "none")
 	require.NoError(t, err)
 

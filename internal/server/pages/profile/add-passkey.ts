@@ -1,10 +1,5 @@
 import { webauthnCreateCredential } from "../lib/webauthn";
-
-function getSelect(id: string): HTMLSelectElement {
-    const el = document.getElementById(id);
-    if (!(el instanceof HTMLSelectElement)) throw new Error(`element #${id} is not a select`);
-    return el;
-}
+import { getInput, getSelect } from "../lib/dom";
 
 async function init() {
     const form = document.getElementById("add-passkey-form");
@@ -17,12 +12,13 @@ void init();
 async function handleAddPasskey(e: Event) {
     e.preventDefault();
 
+    const name = getInput("passkey-name").value;
     const purpose = getSelect("passkey-purpose").value;
 
     const ok = await webauthnCreateCredential(
         "/api/webauthn/credentials/add/start",
         "/api/webauthn/credentials/add/finish",
-        { purpose },
+        { purpose, name },
     );
     if (!ok) return;
 
