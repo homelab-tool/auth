@@ -36,17 +36,9 @@ func SetCookieHandler(jwt *auth.JWTService) echo.HandlerFunc {
 }
 
 func UserIDFromCookie(c *echo.Context, jwt *auth.JWTService) (int64, error) {
-	cookie, err := c.Cookie("token")
-	if err != nil || cookie.Value == "" {
-		return 0, echo.NewHTTPError(401, "unauthorized")
-	}
-	claims, err := jwt.ValidateToken(cookie.Value)
+	userID, err := jwt.UserIDFromCookie(c.Request())
 	if err != nil {
 		return 0, echo.NewHTTPError(401, "unauthorized")
-	}
-	userID, err := auth.ParseUserID(claims.Subject)
-	if err != nil {
-		return 0, echo.NewHTTPError(500, "server error")
 	}
 	return userID, nil
 }

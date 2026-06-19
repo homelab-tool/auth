@@ -76,6 +76,25 @@ func (s *UserService) HasPassword(ctx context.Context, userID int64) (bool, erro
 	return count > 0, nil
 }
 
+func (s *UserService) ListUsers(ctx context.Context) ([]User, error) {
+	rows, err := s.db.QueryContext(ctx,
+		"SELECT id, display_name, created_at FROM users ORDER BY display_name")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	defer rows.Close()
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.DisplayName, &u.CreatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
 func (s *UserService) LoadWebAuthnUser(ctx context.Context, userID int64) (*auth.WebAuthnUser, error) {
 	displayName, err := s.GetDisplayName(ctx, userID)
 	if err != nil {

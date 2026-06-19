@@ -1,0 +1,142 @@
+package groups
+
+import (
+	"strconv"
+
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/service"
+)
+
+type GroupSummary struct {
+	Group       service.Group
+	MemberCount int
+}
+
+type GroupsPageData struct {
+	Groups []GroupSummary
+	Users  []service.User
+}
+
+func groupPath(id int64) string {
+	return "/admin/groups/" + strconv.FormatInt(id, 10)
+}
+
+func groupDetailID(id int64) string {
+	return "group-detail-" + strconv.FormatInt(id, 10)
+}
+
+func groupTarget(id int64) string {
+	return "#" + groupDetailID(id)
+}
+
+func membersPath(groupID int64) string {
+	return groupPath(groupID) + "/members"
+}
+
+func memberPath(groupID, userID int64) string {
+	return membersPath(groupID) + "/" + strconv.FormatInt(userID, 10)
+}
+
+func confirmDelete(group *service.Group) string {
+	msg := "Delete group '" + group.Name + "'?"
+	if group.IsAdmin {
+		msg += " Removing it could lock out admins."
+	}
+	return msg
+}
+
+func confirmRemove(group *service.Group, user service.User) string {
+	msg := "Remove " + user.DisplayName + " from " + group.Name + "?"
+	if group.IsAdmin {
+		msg += " This may remove their admin access."
+	}
+	return msg
+}
+
+templ GroupsPage(data *GroupsPageData) {
+	@layout.Page("Groups") {
+		<h1>Groups</h1>
+		<div id="group-error"></div>
+		<button hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>
+		<div id="create-form"></div>
+		@GroupList(data.Groups)
+	}
+}
+
+templ GroupList(groups []GroupSummary) {
+	<section id="group-list">
+		for _, s := range groups {
+			<article>
+				<header>
+					<strong>{ s.Group.Name }</strong>
+					if s.Group.IsAdmin {
+						<small>Admin</small>
+					}
+					<small>{ s.MemberCount } member(s)</small>
+					<button hx-delete={ groupPath(s.Group.ID) }
+						hx-target="#group-list"
+						hx-target-error="#group-error"
+						hx-swap="outerHTML"
+						hx-confirm={ confirmDelete(&s.Group) }>Delete</button>
+				</header>
+				<p>{ s.Group.Description }</p>
+				<button hx-get={ groupPath(s.Group.ID) } hx-target={ groupTarget(s.Group.ID) } hx-swap="innerHTML" hx-trigger="click once">Manage</button>
+				<div id={ groupDetailID(s.Group.ID) }></div>
+			</article>
+		}
+	</section>
+}
+
+templ GroupForm() {
+	<form hx-post="/admin/groups" hx-target="#group-list" hx-target-error="#group-error" hx-swap="outerHTML">
+		<div>
+			<label for="name">Name</label>
+			<input type="text" id="name" name="name" required/>
+		</div>
+		<div>
+			<label for="description">Description</label>
+			<input type="text" id="description" name="description"/>
+		</div>
+		<div>
+			<label>
+				<input type="checkbox" id="is_admin" name="is_admin" value="true"/>
+				Admin group
+			</label>
+		</div>
+		<button type="submit">Create</button>
+	</form>
+}
+
+templ GroupDetail(group *service.Group, members []service.User, allUsers []service.User) {
+	<section id={ groupDetailID(group.ID) }>
+		<h3>Members</h3>
+		if group.IsAdmin {
+			<p>Admin group</p>
+		}
+		if len(members) > 0 {
+			<ul>
+				for _, m := range members {
+					<li>
+						{ m.DisplayName }
+						<button hx-delete={ memberPath(group.ID, m.ID) }
+							hx-target={ groupTarget(group.ID) }
+
+							hx-swap="outerHTML"
+							hx-confirm={ confirmRemove(group, m) }>Remove</button>
+					</li>
+				}
+			</ul>
+		} else {
+			<p>No members.</p>
+		}
+		<form hx-post={ membersPath(group.ID) } hx-target={ groupTarget(group.ID) } hx-target-error="#group-error" hx-swap="outerHTML">
+			<select name="user_id" required>
+				<option value="">Select user...</option>
+				for _, u := range allUsers {
+					<option value={ u.ID }>{ u.DisplayName }</option>
+				}
+			</select>
+			<button type="submit">Add</button>
+		</form>
+	</section>
+}

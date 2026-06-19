@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -53,6 +54,18 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 	}
 
 	return claims, nil
+}
+
+func (s *JWTService) UserIDFromCookie(r *http.Request) (int64, error) {
+	cookie, err := r.Cookie("token")
+	if err != nil || cookie.Value == "" {
+		return 0, fmt.Errorf("missing token cookie")
+	}
+	claims, err := s.ValidateToken(cookie.Value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid token: %w", err)
+	}
+	return ParseUserID(claims.Subject)
 }
 
 func (s *JWTService) GenerateToken(userID int64) (string, error) {

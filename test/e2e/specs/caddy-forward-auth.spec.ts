@@ -1,46 +1,54 @@
 import { test, expect } from "../fixtures";
 import { caddyRequest } from "../lib/caddy-client";
 import { AdminSiteConfigPage } from "../pages/AdminSiteConfigPage";
-import { RegisterPage } from "../pages/RegisterPage";
+import { LoginPage } from "../pages/LoginPage";
 
 test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
-    const register = new RegisterPage(page, app.authUrl);
-    await register.goto();
-    await register.clientId.fill("caddy-user");
-    await register.password.fill("test-password");
-    await register.confirm.fill("test-password");
-    await register.opaqueSubmitButton.click();
-    await expect(register.enrollmentSection).toBeVisible();
-    await register.continueToProfileLink.click();
-    await expect(page).toHaveURL(`${app.authUrl}/profile`);
+    const login = new LoginPage(page, app.authUrl);
+
+    await test.step("login as admin", async () => {
+        await login.goto();
+        await login.clientId.fill(app.adminUsername);
+        await login.password.fill(app.adminPassword);
+        await login.submitButton.click();
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
+    });
 
     const cookies = await page.context().cookies();
     const token = cookies.find((c) => c.name === "token")!.value;
 
-    const siteConfig = new AdminSiteConfigPage(page, app.authUrl);
-    await siteConfig.goto();
-    await siteConfig.hostnameInput.fill("app1.mydomain.test");
-    await siteConfig.submitButton.click();
-    await expect(siteConfig.siteConfigList).toContainText("app1.mydomain.test");
-
-    const authorized = await caddyRequest({
-        caddyUrl: caddy.caddyUrl,
-        host: "app1.mydomain.test",
-        token,
+    await test.step("create site config", async () => {
+        const siteConfig = new AdminSiteConfigPage(page, app.authUrl);
+        await siteConfig.goto();
+        await siteConfig.hostnameInput.fill("app1.mydomain.test");
+        await siteConfig.submitButton.click();
+        await expect(siteConfig.siteConfigList).toContainText("app1.mydomain.test");
     });
-    expect(authorized.status).toBe(200);
-    expect(authorized.body).toBe("Hello World from caddy!");
 
-    const unauthorized = await caddyRequest({
-        caddyUrl: caddy.caddyUrl,
-        host: "app1.mydomain.test",
+    await test.step("authorized request", async () => {
+        const authorized = await caddyRequest({
+            caddyUrl: caddy.caddyUrl,
+            host: "app1.mydomain.test",
+            token,
+        });
+        expect(authorized.status).toBe(200);
+        expect(authorized.body).toBe("Hello World from caddy!");
     });
-    expect(unauthorized.status).toBe(401);
 
-    const unconfigured = await caddyRequest({
-        caddyUrl: caddy.caddyUrl,
-        host: "app2.mydomain.test",
-        token,
+    await test.step("unauthorized request (no token)", async () => {
+        const unauthorized = await caddyRequest({
+            caddyUrl: caddy.caddyUrl,
+            host: "app1.mydomain.test",
+        });
+        expect(unauthorized.status).toBe(401);
     });
-    expect(unconfigured.status).toBe(401);
+
+    await test.step("unconfigured host", async () => {
+        const unconfigured = await caddyRequest({
+            caddyUrl: caddy.caddyUrl,
+            host: "app2.mydomain.test",
+            token,
+        });
+        expect(unconfigured.status).toBe(401);
+    });
 });

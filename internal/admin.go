@@ -32,9 +32,16 @@ func generatePassword() (string, error) {
 	return string(pw), nil
 }
 
-func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServer *opaque.Server) error {
+func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServer *opaque.Server, groups *service.GroupService) error {
+	ctx := context.Background()
+
+	adminGroupID, err := groups.EnsureAdminGroup(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to ensure admin group: %w", err)
+	}
+
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM secrets WHERE name = ?", adminBootstrappedKey).Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM secrets WHERE name = ?", adminBootstrappedKey).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("failed to check admin bootstrap status: %w", err)
 	}
@@ -84,12 +91,15 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 	encodedRecord := base64.RawURLEncoding.EncodeToString(regRecord.Serialize())
 	encodedCredentialID := base64.RawURLEncoding.EncodeToString(credentialID)
 
-	ctx := context.Background()
 	ksfParams, _ := ksf.ParamsJSON()
-	_, err = opaqueSvc.CreateUser(ctx, username, encodedCredentialID, encodedRecord,
+	userID, err := opaqueSvc.CreateUser(ctx, username, encodedCredentialID, encodedRecord,
 		ksf.AlgorithmName(), ksf.Salt, ksfParams, ksf.OutputLen)
 	if err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
+	}
+
+	if err := groups.AddUser(ctx, userID, adminGroupID); err != nil {
+		return fmt.Errorf("failed to add admin user to admin group: %w", err)
 	}
 
 	_, err = db.Exec("INSERT INTO secrets (name, value) VALUES (?, ?)", adminBootstrappedKey, []byte("1"))

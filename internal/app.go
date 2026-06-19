@@ -10,8 +10,10 @@ import (
 	"github.com/homelab-tool/auth/internal/server/api"
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
-	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	authmw "github.com/homelab-tool/auth/internal/server/middleware"
+	"github.com/homelab-tool/auth/internal/server/pages/admin/groups"
 	"github.com/homelab-tool/auth/internal/server/pages/admin/siteconfig"
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
 	"github.com/homelab-tool/auth/internal/server/pages/login"
 	"github.com/homelab-tool/auth/internal/server/pages/profile"
 	"github.com/homelab-tool/auth/internal/server/pages/register"
@@ -37,6 +39,7 @@ type Services struct {
 	SecondFactor  service.SecondFactorService
 	TOTP          *service.TOTPService
 	SiteConfigs   *service.SiteConfigService
+	Groups        *service.GroupService
 	OpaqueServer  *bytemareopaque.Server
 }
 
@@ -69,6 +72,7 @@ func InitServices(db *sql.DB, secondFactorSvc service.SecondFactorService) (*Ser
 		SecondFactor: secondFactorSvc,
 		TOTP:         service.NewTOTPService(db),
 		SiteConfigs:  service.NewSiteConfigService(db),
+		Groups:       service.NewGroupService(db),
 		OpaqueServer: opaqueServer,
 	}, nil
 }
@@ -115,7 +119,7 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
-	if err := BootstrapAdminUser(db, svcs.Opaque, svcs.OpaqueServer); err != nil {
+	if err := BootstrapAdminUser(db, svcs.Opaque, svcs.OpaqueServer, svcs.Groups); err != nil {
 		return nil, err
 	}
 
@@ -174,10 +178,21 @@ func CreateApp() (*App, error) {
 	profileGroup.GET("/passkey/add", profile.AddPasskeyPageHandler(svcs.JWT, svcs.Credentials))
 	profileGroup.DELETE("/passkey/:id", profile.DeletePasskeyHandler(svcs.JWT, svcs.Credentials))
 
-	scHandler := siteconfig.NewHandler(svcs.JWT, svcs.SiteConfigs)
-	e.GET("/admin/site-configs", scHandler.PageHandler)
-	e.POST("/admin/site-configs", scHandler.CreateHandler)
-	e.DELETE("/admin/site-configs/:id", scHandler.DeleteHandler)
+	adminGroup := e.Group("/admin", authmw.AdminMiddleware(svcs.JWT, svcs.Groups))
+
+	scHandler := siteconfig.NewHandler(svcs.SiteConfigs)
+	adminGroup.GET("/site-configs", scHandler.PageHandler)
+	adminGroup.POST("/site-configs", scHandler.CreateHandler)
+	adminGroup.DELETE("/site-configs/:id", scHandler.DeleteHandler)
+
+	grpHandler := groups.NewHandler(svcs.Groups, svcs.Users)
+	adminGroup.GET("/groups", grpHandler.PageHandler)
+	adminGroup.GET("/groups/new", grpHandler.GroupFormHandler)
+	adminGroup.POST("/groups", grpHandler.CreateHandler)
+	adminGroup.DELETE("/groups/:id", grpHandler.DeleteHandler)
+	adminGroup.GET("/groups/:id", grpHandler.ManageHandler)
+	adminGroup.POST("/groups/:id/members", grpHandler.AddMemberHandler)
+	adminGroup.DELETE("/groups/:id/members/:userID", grpHandler.RemoveMemberHandler)
 
 	app := &App{
 		Router: e,
