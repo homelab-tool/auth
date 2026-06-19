@@ -11,6 +11,7 @@ import (
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/server/pages/admin/siteconfig"
 	"github.com/homelab-tool/auth/internal/server/pages/login"
 	"github.com/homelab-tool/auth/internal/server/pages/profile"
 	"github.com/homelab-tool/auth/internal/server/pages/register"
@@ -135,7 +136,6 @@ func CreateApp() (*App, error) {
 		Credentials:     svcs.Credentials,
 		SecondFactorSvc: svcs.SecondFactor,
 		TOTP:            svcs.TOTP,
-		SiteConfigs:     svcs.SiteConfigs,
 	}
 
 	if err = api.SetupRoutes(e.Group("/api"), svcs.OpaqueServer, sfHandler); err != nil {
@@ -173,6 +173,11 @@ func CreateApp() (*App, error) {
 	profileGroup.GET("/password", profile.PasswordPageHandler(svcs.JWT, svcs.Users, svcs.Opaque))
 	profileGroup.GET("/passkey/add", profile.AddPasskeyPageHandler(svcs.JWT, svcs.Credentials))
 	profileGroup.DELETE("/passkey/:id", profile.DeletePasskeyHandler(svcs.JWT, svcs.Credentials))
+
+	scHandler := siteconfig.NewHandler(svcs.JWT, svcs.SiteConfigs)
+	e.GET("/admin/site-configs", scHandler.PageHandler)
+	e.POST("/admin/site-configs", scHandler.CreateHandler)
+	e.DELETE("/admin/site-configs/:id", scHandler.DeleteHandler)
 
 	app := &App{
 		Router: e,

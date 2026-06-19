@@ -1,0 +1,37 @@
+package siteconfig
+
+import (
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/service"
+)
+
+templ Page(data []service.SiteConfig) {
+	@layout.Page("Site Configs") {
+		<h1>Site Configs</h1>
+		<form hx-post="/admin/site-configs" hx-target="#site-config-list" hx-swap="outerHTML">
+			<div>
+				<label for="hostname">Hostname</label>
+				<input type="text" id="hostname" name="hostname" required/>
+			</div>
+			<button type="submit">Add</button>
+		</form>
+		@SiteConfigList(data)
+	}
+}
+
+templ SiteConfigList(data []service.SiteConfig) {
+	<section id="site-config-list">
+		if len(data) > 0 {
+			<ul>
+				for _, cfg := range data {
+					<li>
+						<strong>{ cfg.Hostname }</strong>
+						<button hx-delete="/admin/site-configs/{ cfg.ID }" hx-target="#site-config-list" hx-swap="outerHTML" hx-confirm="Delete { cfg.Hostname }?">Delete</button>
+					</li>
+				}
+			</ul>
+		} else {
+			<p>No site configs configured.</p>
+		}
+	</section>
+}

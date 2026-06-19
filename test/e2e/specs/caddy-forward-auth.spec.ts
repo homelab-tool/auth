@@ -1,5 +1,6 @@
 import { test, expect } from "../fixtures";
 import { caddyRequest } from "../lib/caddy-client";
+import { AdminSiteConfigPage } from "../pages/AdminSiteConfigPage";
 import { RegisterPage } from "../pages/RegisterPage";
 
 test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
@@ -16,11 +17,11 @@ test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
     const cookies = await page.context().cookies();
     const token = cookies.find((c) => c.name === "token")!.value;
 
-    const apiResp = await page.request.post(`${app.authUrl}/api/site-configs`, {
-        headers: { Authorization: `Bearer ${token}` },
-        data: { hostname: "app1.mydomain.test" },
-    });
-    expect(apiResp.status()).toBe(201);
+    const siteConfig = new AdminSiteConfigPage(page, app.authUrl);
+    await siteConfig.goto();
+    await siteConfig.hostnameInput.fill("app1.mydomain.test");
+    await siteConfig.submitButton.click();
+    await expect(siteConfig.siteConfigList).toContainText("app1.mydomain.test");
 
     const authorized = await caddyRequest({
         caddyUrl: caddy.caddyUrl,

@@ -59,7 +59,6 @@ func NewTestServer(t *testing.T, db *sql.DB, opts *NewTestServerOpts) *echo.Echo
 		Credentials:     svcs.Credentials,
 		SecondFactorSvc: svcs.SecondFactor,
 		TOTP:            svcs.TOTP,
-		SiteConfigs:     svcs.SiteConfigs,
 	}
 	sfHandler, err := secondfactor.NewHandler(
 		a.Users, a.Credentials, a.JWT, a.WebAuthn,

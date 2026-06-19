@@ -7,7 +7,6 @@ import (
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api/opaque"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
-	"github.com/homelab-tool/auth/internal/server/api/siteconfig"
 	"github.com/homelab-tool/auth/internal/server/api/webauthn"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
@@ -22,7 +21,6 @@ type Api struct {
 	Credentials     *service.CredentialService
 	SecondFactorSvc service.SecondFactorService
 	TOTP            *service.TOTPService
-	SiteConfigs     *service.SiteConfigService
 }
 
 func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server, sfHandler *secondfactor.Handler) error {
@@ -38,11 +36,8 @@ func (api *Api) SetupRoutes(e *echo.Group, opaqueServer *bytemareopaque.Server, 
 		return err
 	}
 
-	siteConfigHandler := siteconfig.NewHandler(api.SiteConfigs)
-
 	opaqueHandler.SetupRoutes(e.Group("/opaque"), jwtMiddleware(api.JWT))
 	webAuthnHandler.SetupRoutes(e.Group("/webauthn"), jwtMiddleware(api.JWT))
-	siteConfigHandler.SetupRoutes(e.Group("/site-configs"), jwtMiddleware(api.JWT))
 
 	e.GET("/whoami", api.whoami, jwtMiddleware(api.JWT))
 
