@@ -11,10 +11,11 @@ import (
 type Handler struct {
 	JWT         *auth.JWTService
 	SiteConfigs *service.SiteConfigService
+	Groups      *service.GroupService
 }
 
-func NewHandler(jwt *auth.JWTService, siteConfigs *service.SiteConfigService) *Handler {
-	return &Handler{JWT: jwt, SiteConfigs: siteConfigs}
+func NewHandler(jwt *auth.JWTService, siteConfigs *service.SiteConfigService, groups *service.GroupService) *Handler {
+	return &Handler{JWT: jwt, SiteConfigs: siteConfigs, Groups: groups}
 }
 
 func (h *Handler) SetupRoutes(g *echo.Group) {
@@ -33,19 +34,31 @@ func (h *Handler) forwardAuth(c *echo.Context) error {
 		return c.String(401, "unauthorized")
 	}
 
+	userID, err := auth.ParseUserID(claims.Subject)
+	if err != nil {
+		log.Debug().Err(err).Msg("forward_auth: failed to parse user id")
+		return c.String(401, "unauthorized")
+	}
+
 	host := c.Request().Header.Get("X-Forwarded-Host")
 	if host == "" {
 		log.Debug().Msg("forward_auth: missing X-Forwarded-Host")
 		return c.String(401, "unauthorized")
 	}
 
-	exists, err := h.SiteConfigs.Exists(c.Request().Context(), host)
+	cfg, err := h.SiteConfigs.GetByHostname(c.Request().Context(), host)
 	if err != nil {
 		log.Debug().Err(err).Str("host", host).Msg("forward_auth: site config lookup failed")
 		return c.String(401, "unauthorized")
 	}
-	if !exists {
-		log.Debug().Str("host", host).Msg("forward_auth: host not configured")
+
+	canAccess, err := h.Groups.CanAccessSite(c.Request().Context(), userID, cfg.ID)
+	if err != nil {
+		log.Debug().Err(err).Int64("userID", userID).Int64("siteID", cfg.ID).Msg("forward_auth: access check failed")
+		return c.String(401, "unauthorized")
+	}
+	if !canAccess {
+		log.Debug().Int64("userID", userID).Int64("siteID", cfg.ID).Msg("forward_auth: user not authorized for site")
 		return c.String(401, "unauthorized")
 	}
 

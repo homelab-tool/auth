@@ -59,6 +59,21 @@ func (s *SiteConfigService) GetByHostname(ctx context.Context, hostname string) 
 	return &cfg, nil
 }
 
+func (s *SiteConfigService) GetByID(ctx context.Context, id int64) (*SiteConfig, error) {
+	var cfg SiteConfig
+	var createdAt, updatedAt string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id, hostname, created_at, updated_at FROM site_configs WHERE id = ?",
+		id).Scan(&cfg.ID, &cfg.Hostname, &createdAt, &updatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query site config: %w", err)
+	}
+
+	cfg.CreatedAt, _ = time.Parse(time.RFC3339, createdAt)
+	cfg.UpdatedAt, _ = time.Parse(time.RFC3339, updatedAt)
+	return &cfg, nil
+}
+
 func (s *SiteConfigService) List(ctx context.Context) ([]SiteConfig, error) {
 	rows, err := s.db.QueryContext(ctx, "SELECT id, hostname, created_at, updated_at FROM site_configs ORDER BY hostname")
 	if err != nil {

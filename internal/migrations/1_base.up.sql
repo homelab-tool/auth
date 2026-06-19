@@ -69,4 +69,18 @@ CREATE TABLE user_groups (
   group_id   INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (user_id, group_id)
+);
+
+CREATE TABLE user_site_access (
+  user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  site_config_id INTEGER NOT NULL REFERENCES site_configs(id) ON DELETE CASCADE,
+  created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, site_config_id)
+);
+
+CREATE TABLE group_site_access (
+  group_id       INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+  site_config_id INTEGER NOT NULL REFERENCES site_configs(id) ON DELETE CASCADE,
+  created_at     TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (group_id, site_config_id)
 )

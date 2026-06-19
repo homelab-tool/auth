@@ -21,4 +21,22 @@ export class AdminSiteConfigPage {
     get siteConfigList() {
         return this.page.locator("#site-config-list");
     }
+
+    manageButton(hostname: string) {
+        return this.page.locator(
+            `li:has(strong:has-text("${hostname}")) button:has-text('Manage')`,
+        );
+    }
+
+    get groupSelect() {
+        return this.page.locator("select[name='group_id']");
+    }
+
+    get grantGroupButton() {
+        return this.page.locator("form:has(select[name='group_id']) button[type='submit']");
+    }
+
+    siteAccessSection(hostname: string) {
+        return this.page.locator(`section[id^='site-access-']`);
+    }
 }

@@ -1,9 +1,43 @@
 package siteconfig
 
 import (
+	"strconv"
+
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 	"github.com/homelab-tool/auth/internal/service"
 )
+
+func siteConfigPath(id int64) string {
+	return "/admin/site-configs/" + strconv.FormatInt(id, 10)
+}
+
+func siteAccessID(id int64) string {
+	return "site-access-" + strconv.FormatInt(id, 10)
+}
+
+func siteAccessTarget(id int64) string {
+	return "#" + siteAccessID(id)
+}
+
+func grantGroupSitePath(siteID int64) string {
+	return siteConfigPath(siteID) + "/groups"
+}
+
+func revokeGroupSitePath(siteID, groupID int64) string {
+	return grantGroupSitePath(siteID) + "/" + strconv.FormatInt(groupID, 10)
+}
+
+func grantUserSitePath(siteID int64) string {
+	return siteConfigPath(siteID) + "/users"
+}
+
+func revokeUserSitePath(siteID, userID int64) string {
+	return grantUserSitePath(siteID) + "/" + strconv.FormatInt(userID, 10)
+}
+
+func confirmDeleteSite(hostname string) string {
+	return "Delete " + hostname + "?"
+}
 
 templ Page(data []service.SiteConfig) {
 	@layout.Page("Site Configs") {
@@ -15,23 +49,80 @@ templ Page(data []service.SiteConfig) {
 			</div>
 			<button type="submit">Add</button>
 		</form>
-		@SiteConfigList(data)
+		<section id="site-config-list">
+			if len(data) > 0 {
+				<ul>
+					for _, cfg := range data {
+						<li>
+							<strong>{ cfg.Hostname }</strong>
+							<button hx-delete={ siteConfigPath(cfg.ID) }
+								hx-target="#site-config-list"
+								hx-swap="outerHTML"
+								hx-confirm={ confirmDeleteSite(cfg.Hostname) }>Delete</button>
+							<button hx-get={ siteConfigPath(cfg.ID) }
+								hx-target={ siteAccessTarget(cfg.ID) }
+								hx-swap="innerHTML"
+								hx-trigger="click once">Manage</button>
+							<div id={ siteAccessID(cfg.ID) }></div>
+						</li>
+					}
+				</ul>
+			} else {
+				<p>No site configs configured.</p>
+			}
+		</section>
 	}
 }
 
-templ SiteConfigList(data []service.SiteConfig) {
-	<section id="site-config-list">
-		if len(data) > 0 {
+templ SiteAccessSection(site *service.SiteConfig, groups []service.Group, allUsers []service.User, siteGroups []service.Group, siteUsers []service.User) {
+	<section id={ siteAccessID(site.ID) }>
+		<h3>Group Access</h3>
+		if len(siteGroups) > 0 {
 			<ul>
-				for _, cfg := range data {
+				for _, g := range siteGroups {
 					<li>
-						<strong>{ cfg.Hostname }</strong>
-						<button hx-delete="/admin/site-configs/{ cfg.ID }" hx-target="#site-config-list" hx-swap="outerHTML" hx-confirm="Delete { cfg.Hostname }?">Delete</button>
+						{ g.Name }
+						<button hx-delete={ revokeGroupSitePath(site.ID, g.ID) }
+							hx-target={ siteAccessTarget(site.ID) }
+							hx-swap="outerHTML">Revoke</button>
 					</li>
 				}
 			</ul>
 		} else {
-			<p>No site configs configured.</p>
+			<p>No groups have access.</p>
 		}
+		<form hx-post={ grantGroupSitePath(site.ID) } hx-target={ siteAccessTarget(site.ID) } hx-swap="outerHTML">
+			<select name="group_id" required>
+				<option value="">Select group...</option>
+				for _, g := range groups {
+					<option value={ g.ID }>{ g.Name }</option>
+				}
+			</select>
+			<button type="submit">Grant</button>
+		</form>
+		<h3>User Access</h3>
+		if len(siteUsers) > 0 {
+			<ul>
+				for _, u := range siteUsers {
+					<li>
+						{ u.DisplayName }
+						<button hx-delete={ revokeUserSitePath(site.ID, u.ID) }
+							hx-target={ siteAccessTarget(site.ID) }
+							hx-swap="outerHTML">Revoke</button>
+					</li>
+				}
+			</ul>
+		} else {
+			<p>No users have direct access.</p>
+		}
+		<form hx-post={ grantUserSitePath(site.ID) } hx-target={ siteAccessTarget(site.ID) } hx-swap="outerHTML">
+			<select name="user_id" required>
+				<option value="">Select user...</option>
+				for _, u := range allUsers {
+					<option value={ u.ID }>{ u.DisplayName }</option>
+				}
+			</select>
+			<button type="submit">Grant</button>
+		</form>
 	</section>
 }

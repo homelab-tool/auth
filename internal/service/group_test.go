@@ -336,3 +336,171 @@ func TestGroupServiceMemberCount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 }
+
+func TestGroupServiceGrantGroupSiteAccess(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+
+	group, err := svc.Create(context.Background(), "Test", "", false)
+	require.NoError(t, err)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	err = svc.GrantGroupSiteAccess(context.Background(), group.ID, site.ID)
+	require.NoError(t, err)
+
+	sites, err := svc.SitesForGroup(context.Background(), group.ID)
+	require.NoError(t, err)
+	require.Len(t, sites, 1)
+	assert.Equal(t, "app.example.com", sites[0].Hostname)
+}
+
+func TestGroupServiceRevokeGroupSiteAccess(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+
+	group, err := svc.Create(context.Background(), "Test", "", false)
+	require.NoError(t, err)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	err = svc.GrantGroupSiteAccess(context.Background(), group.ID, site.ID)
+	require.NoError(t, err)
+
+	err = svc.RevokeGroupSiteAccess(context.Background(), group.ID, site.ID)
+	require.NoError(t, err)
+
+	sites, err := svc.SitesForGroup(context.Background(), group.ID)
+	require.NoError(t, err)
+	assert.Empty(t, sites)
+}
+
+func TestGroupServiceGrantUserSiteAccess(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+	userSvc := service.NewUserService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	userID, err := userSvc.Create(context.Background(), "testuser")
+	require.NoError(t, err)
+
+	err = svc.GrantUserSiteAccess(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+
+	users, err := svc.UsersForSite(context.Background(), site.ID)
+	require.NoError(t, err)
+	require.Len(t, users, 1)
+	assert.Equal(t, "testuser", users[0].DisplayName)
+}
+
+func TestGroupServiceRevokeUserSiteAccess(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+	userSvc := service.NewUserService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	userID, err := userSvc.Create(context.Background(), "testuser")
+	require.NoError(t, err)
+
+	err = svc.GrantUserSiteAccess(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+
+	err = svc.RevokeUserSiteAccess(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+
+	users, err := svc.UsersForSite(context.Background(), site.ID)
+	require.NoError(t, err)
+	assert.Empty(t, users)
+}
+
+func TestGroupServiceGroupsForSite(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	g1, err := svc.Create(context.Background(), "Alpha", "", false)
+	require.NoError(t, err)
+	g2, err := svc.Create(context.Background(), "Beta", "", false)
+	require.NoError(t, err)
+
+	svc.GrantGroupSiteAccess(context.Background(), g1.ID, site.ID)
+	svc.GrantGroupSiteAccess(context.Background(), g2.ID, site.ID)
+
+	groups, err := svc.GroupsForSite(context.Background(), site.ID)
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	assert.Equal(t, "Alpha", groups[0].Name)
+	assert.Equal(t, "Beta", groups[1].Name)
+}
+
+func TestGroupServiceCanAccessSiteViaGroup(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+	userSvc := service.NewUserService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	group, err := svc.Create(context.Background(), "Family", "", false)
+	require.NoError(t, err)
+
+	userID, err := userSvc.Create(context.Background(), "testuser")
+	require.NoError(t, err)
+
+	svc.AddUser(context.Background(), userID, group.ID)
+	svc.GrantGroupSiteAccess(context.Background(), group.ID, site.ID)
+
+	ok, err := svc.CanAccessSite(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestGroupServiceCanAccessSiteViaDirectUser(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+	userSvc := service.NewUserService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	userID, err := userSvc.Create(context.Background(), "testuser")
+	require.NoError(t, err)
+
+	svc.GrantUserSiteAccess(context.Background(), userID, site.ID)
+
+	ok, err := svc.CanAccessSite(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
+func TestGroupServiceCanAccessSiteDenied(t *testing.T) {
+	db := newTestDB(t)
+	svc := service.NewGroupService(db)
+	userSvc := service.NewUserService(db)
+
+	siteSvc := service.NewSiteConfigService(db)
+	site, err := siteSvc.Create(context.Background(), "app.example.com")
+	require.NoError(t, err)
+
+	userID, err := userSvc.Create(context.Background(), "testuser")
+	require.NoError(t, err)
+
+	ok, err := svc.CanAccessSite(context.Background(), userID, site.ID)
+	require.NoError(t, err)
+	assert.False(t, ok)
+}

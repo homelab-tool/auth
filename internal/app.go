@@ -146,7 +146,7 @@ func CreateApp() (*App, error) {
 		return nil, err
 	}
 
-	caddyHandler := caddy.NewHandler(svcs.JWT, svcs.SiteConfigs)
+	caddyHandler := caddy.NewHandler(svcs.JWT, svcs.SiteConfigs, svcs.Groups)
 	caddyHandler.SetupRoutes(e.Group("/caddy"))
 
 	subFS, err := fs.Sub(static.Files, "dist")
@@ -180,10 +180,15 @@ func CreateApp() (*App, error) {
 
 	adminGroup := e.Group("/admin", authmw.AdminMiddleware(svcs.JWT, svcs.Groups))
 
-	scHandler := siteconfig.NewHandler(svcs.SiteConfigs)
+	scHandler := siteconfig.NewHandler(svcs.SiteConfigs, svcs.Groups, svcs.Users)
 	adminGroup.GET("/site-configs", scHandler.PageHandler)
 	adminGroup.POST("/site-configs", scHandler.CreateHandler)
 	adminGroup.DELETE("/site-configs/:id", scHandler.DeleteHandler)
+	adminGroup.GET("/site-configs/:id", scHandler.ManageHandler)
+	adminGroup.POST("/site-configs/:id/groups", scHandler.GrantGroupHandler)
+	adminGroup.DELETE("/site-configs/:id/groups/:groupID", scHandler.RevokeGroupHandler)
+	adminGroup.POST("/site-configs/:id/users", scHandler.GrantUserHandler)
+	adminGroup.DELETE("/site-configs/:id/users/:userID", scHandler.RevokeUserHandler)
 
 	grpHandler := groups.NewHandler(svcs.Groups, svcs.Users)
 	adminGroup.GET("/groups", grpHandler.PageHandler)

@@ -17,12 +17,17 @@ test("Caddy forward_auth with Bearer token", async ({ page, app, caddy }) => {
     const cookies = await page.context().cookies();
     const token = cookies.find((c) => c.name === "token")!.value;
 
-    await test.step("create site config", async () => {
+    await test.step("create site config and grant access", async () => {
         const siteConfig = new AdminSiteConfigPage(page, app.authUrl);
         await siteConfig.goto();
         await siteConfig.hostnameInput.fill("app1.mydomain.test");
         await siteConfig.submitButton.click();
         await expect(siteConfig.siteConfigList).toContainText("app1.mydomain.test");
+
+        await siteConfig.manageButton("app1.mydomain.test").click();
+        await siteConfig.groupSelect.selectOption({ label: "Admin" });
+        await siteConfig.grantGroupButton.click();
+        await expect(siteConfig.siteAccessSection("app1.mydomain.test")).toContainText("Admin");
     });
 
     await test.step("authorized request", async () => {
