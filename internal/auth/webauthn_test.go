@@ -89,7 +89,6 @@ func TestWebAuthnUserMethods(t *testing.T) {
 	id := user.WebAuthnID()
 	assert.Len(t, id, 8)
 	assert.Equal(t, "Test User", user.WebAuthnDisplayName())
-	assert.Equal(t, "42", user.WebAuthnName())
-	assert.Equal(t, "", user.WebAuthnIcon())
+	assert.Equal(t, "Test User", user.WebAuthnName())
 	assert.Empty(t, user.WebAuthnCredentials())
 }
