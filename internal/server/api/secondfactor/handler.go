@@ -113,15 +113,10 @@ func (h *Handler) GetPendingMethods(sessionID string) ([]string, error) {
 func (h *Handler) SetupRoutes(e *echo.Group, jwtMiddleware echo.MiddlewareFunc) {
 	e.POST("/login/2fa/webauthn/start", h.login2FAStart)
 	e.POST("/login/2fa/webauthn/finish", h.login2FAFinish)
-	e.POST("/login/2fa/totp", h.login2FATOTP)
-
 	reg := e.Group("/register/2fa")
 	reg.Use(jwtMiddleware)
 	reg.POST("/webauthn/start", h.register2FAStart)
 	reg.POST("/webauthn/finish", h.register2FAFinish)
-	reg.POST("/totp/generate", h.register2FATOTPGenerate)
-	reg.POST("/totp/verify", h.register2FATOTPVerify)
-	reg.DELETE("/:method", h.disable2FA)
 }
 
 func (h *Handler) login2FAStart(c *echo.Context) error {
@@ -316,45 +311,6 @@ func (h *Handler) register2FAFinish(c *echo.Context) error {
 	return c.JSON(200, map[string]string{"status": "ok"})
 }
 
-func (h *Handler) login2FATOTP(c *echo.Context) error {
-	var request struct {
-		SessionID string `json:"sessionId"`
-		Code      string `json:"code"`
-	}
-	if err := c.Bind(&request); err != nil {
-		log.Err(err).Msg("failed to bind totp 2fa request")
-		return c.String(400, "invalid request")
-	}
-
-	if request.Code == "" {
-		return c.String(400, "invalid request")
-	}
-
-	pending, found := h.pending2FA.Get(request.SessionID)
-	if !found || pending == nil {
-		return c.String(400, "invalid request")
-	}
-
-	valid, err := h.totpService.ValidateCode(c.Request().Context(), pending.userID, request.Code)
-	if err != nil {
-		log.Err(err).Int64("userID", pending.userID).Msg("failed to validate totp code")
-		return c.String(500, "server error")
-	}
-	if !valid {
-		return c.String(401, "invalid credentials")
-	}
-
-	h.pending2FA.Del(request.SessionID)
-
-	token, err := h.jwtService.GenerateToken(pending.userID)
-	if err != nil {
-		log.Err(err).Msg("failed to generate jwt after 2fa")
-		return c.String(500, "server error")
-	}
-
-	return c.JSON(200, map[string]string{"token": token})
-}
-
 func (h *Handler) ValidatePendingTOTP(ctx context.Context, sessionID, code string) (string, error) {
 	pending, found := h.pending2FA.Get(sessionID)
 	if !found || pending == nil {
@@ -379,99 +335,12 @@ func (h *Handler) ValidatePendingTOTP(ctx context.Context, sessionID, code strin
 	return token, nil
 }
 
-func (h *Handler) register2FATOTPGenerate(c *echo.Context) error {
-	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
-	if !ok {
-		return c.String(401, "unauthorized")
-	}
-
-	userID, err := auth.ParseUserID(claims.Subject)
-	if err != nil {
-		log.Err(err).Msg("failed to parse user id from claims")
-		return c.String(500, "server error")
-	}
-
-	displayName, err := h.userService.GetDisplayName(c.Request().Context(), userID)
-	if err != nil {
-		log.Err(err).Int64("userID", userID).Msg("failed to query display name for totp registration")
-		return c.String(500, "server error")
-	}
-
-	result, err := h.totpService.GenerateSecret(c.Request().Context(), userID, displayName, "auth")
-	if err != nil {
-		log.Err(err).Int64("userID", userID).Msg("failed to generate totp secret")
-		return c.String(500, "server error")
-	}
-
-	return c.JSON(200, result)
-}
-
-func (h *Handler) register2FATOTPVerify(c *echo.Context) error {
-	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
-	if !ok {
-		return c.String(401, "unauthorized")
-	}
-
-	userID, err := auth.ParseUserID(claims.Subject)
-	if err != nil {
-		log.Err(err).Msg("failed to parse user id from claims")
-		return c.String(500, "server error")
-	}
-
-	var request struct {
-		Code string `json:"code"`
-	}
-	if err := c.Bind(&request); err != nil {
-		log.Err(err).Msg("failed to bind totp verify request")
-		return c.String(400, "invalid request")
-	}
-
-	if request.Code == "" {
-		return c.String(400, "invalid request")
-	}
-
-	var verifyOK bool
-	verifyOK, err = h.totpService.VerifyAndEnable(c.Request().Context(), userID, request.Code)
-	if err != nil {
-		log.Err(err).Int64("userID", userID).Msg("failed to verify and enable totp")
-		return c.String(500, "server error")
-	}
-	if !verifyOK {
-		return c.String(400, "invalid code")
-	}
-
-	return c.JSON(200, map[string]string{"status": "ok"})
-}
-
 func generateSessionID() string {
 	b := make([]byte, 32)
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
-func (h *Handler) disable2FA(c *echo.Context) error {
-	method := c.Param("method")
-	if method != "totp" && method != "webauthn" {
-		return c.String(400, "invalid method")
-	}
 
-	claims, ok := c.Get(auth.ContextKeyClaims).(*auth.Claims)
-	if !ok {
-		return c.String(401, "unauthorized")
-	}
-
-	userID, err := auth.ParseUserID(claims.Subject)
-	if err != nil {
-		log.Err(err).Msg("failed to parse user id from claims")
-		return c.String(500, "server error")
-	}
-
-	if err := h.secondFactorSvc.Disable(userID, method); err != nil {
-		log.Err(err).Int64("userID", userID).Str("method", method).Msg("failed to disable second factor")
-		return c.String(500, "server error")
-	}
-
-	return c.JSON(200, map[string]string{"status": "ok"})
-}
 
 
