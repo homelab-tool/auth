@@ -60,15 +60,11 @@ func (u *WebAuthnUser) WebAuthnID() []byte {
 }
 
 func (u *WebAuthnUser) WebAuthnName() string {
-	return fmt.Sprintf("%d", u.ID)
+	return u.DisplayName
 }
 
 func (u *WebAuthnUser) WebAuthnDisplayName() string {
 	return u.DisplayName
-}
-
-func (u *WebAuthnUser) WebAuthnIcon() string {
-	return ""
 }
 
 func (u *WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
