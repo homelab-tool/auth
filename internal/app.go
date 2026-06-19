@@ -162,7 +162,6 @@ func CreateApp() (*App, error) {
 	e.GET("/register/2fa/webauthn", enrollHandler.HandleWebAuthnSetupPage)
 	e.POST("/register/2fa/totp/generate", enrollHandler.HandleTOTPGenerate)
 	e.POST("/register/2fa/totp/verify", enrollHandler.HandleTOTPVerify)
-	e.POST("/register/2fa/totp/verify-redirect", enrollHandler.HandleTOTPVerifyAndRedirect)
 	e.POST("/auth/set-cookie", layout.SetCookieHandler(svcs.JWT))
 	e.POST("/auth/logout", layout.LogoutHandler)
 

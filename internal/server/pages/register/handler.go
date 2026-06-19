@@ -50,7 +50,7 @@ func (h *EnrollmentHandler) HandleTOTPGenerate(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	return TOTPSetupForm(result.Secret, result.URI, "/register/2fa/totp/verify").Render(c.Request().Context(), c.Response())
+	return TOTPSetupForm(result.Secret, result.URI, "/register/2fa/totp/verify", "").Render(c.Request().Context(), c.Response())
 }
 
 func (h *EnrollmentHandler) HandleTOTPVerify(c *echo.Context) error {
@@ -73,31 +73,13 @@ func (h *EnrollmentHandler) HandleTOTPVerify(c *echo.Context) error {
 		return TOTPError("Invalid code. Please try again.").Render(c.Request().Context(), c.Response())
 	}
 
+	redirect := c.Request().FormValue("_redirect")
+	if redirect != "" {
+		c.Response().Header().Set("HX-Redirect", redirect)
+		return c.NoContent(200)
+	}
+
 	return TOTPSuccess().Render(c.Request().Context(), c.Response())
-}
-
-func (h *EnrollmentHandler) HandleTOTPVerifyAndRedirect(c *echo.Context) error {
-	userID, err := layout.UserIDFromCookie(c, h.jwt)
-	if err != nil {
-		return c.Redirect(302, "/login")
-	}
-
-	code := c.Request().FormValue("code")
-	if code == "" {
-		return c.String(400, "Code is required")
-	}
-
-	ok, err := h.totp.VerifyAndEnable(c.Request().Context(), userID, code)
-	if err != nil {
-		log.Err(err).Int64("userID", userID).Msg("failed to verify totp")
-		return c.String(500, "server error")
-	}
-	if !ok {
-		return c.String(400, "Invalid code")
-	}
-
-	c.Response().Header().Set("HX-Redirect", "/profile")
-	return c.NoContent(200)
 }
 
 func (h *EnrollmentHandler) HandleTOTPSetupPage(c *echo.Context) error {
