@@ -51,11 +51,13 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 	}
 
 	username := os.Getenv("ADMIN_USERNAME")
+	usernameFromEnv := username != ""
 	if username == "" {
 		username = "admin"
 	}
 
 	password := os.Getenv("ADMIN_PASSWORD")
+	passwordFromEnv := password != ""
 	if password == "" {
 		pwd, err := generatePassword()
 		if err != nil {
@@ -107,7 +109,9 @@ func BootstrapAdminUser(db *sql.DB, opaqueSvc *service.OpaqueService, opaqueServ
 		return fmt.Errorf("failed to mark admin bootstrap as done: %w", err)
 	}
 
-	log.Info().Str("username", username).Str("password", password).Msg("admin user created")
+	if !usernameFromEnv && !passwordFromEnv {
+		log.Info().Str("username", username).Str("password", password).Msg("admin user created")
+	}
 
 	return nil
 }
