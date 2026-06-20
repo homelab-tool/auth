@@ -44,6 +44,13 @@ func (k *KSFSettings) Identifier() ksf.Identifier {
 	return ksf.Argon2id;
 }
 
+// DefaultKSF returns the default KSF settings.
+//
+// The salt is a zero-byte array to match the opaque-ke WASM library's
+// hardcoded default (&[0; argon2::RECOMMENDED_SALT_LEN]) for protocol
+// compatibility. Per RFC 9807 §10.11, precomputation resistance is
+// provided by the OPRF key (opaque_skm), not the KSF salt, so a
+// static salt is acceptable here.
 func DefaultKSF() *KSFSettings {
 	return &KSFSettings{
 		Algorithm: Argon2Params{
