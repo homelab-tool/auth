@@ -167,8 +167,7 @@ export const test = base.extend<{
                 .withNetworkAliases("auth")
                 .withEnvironment({
                     WEBAUTHN_RPID: "localhost",
-                    WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
-                    ADMIN_USERNAME: "admin",
+                    WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`
                 })
                 .withLogConsumer(authLog.consumer)
                 .start();
