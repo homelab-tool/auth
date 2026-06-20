@@ -1,21 +1,38 @@
 package login
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
+	"github.com/dgraph-io/ristretto/v2"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
 
+const maxTOTPAttempts = 5
+const totpAttemptWindow = 5 * time.Minute
+
 type TwoFAHandler struct {
 	secondFactor *secondfactor.Handler
 	jwt          *auth.JWTService
+	failures     *ristretto.Cache[string, int]
 }
 
-func NewTwoFAHandler(sf *secondfactor.Handler, jwt *auth.JWTService) *TwoFAHandler {
-	return &TwoFAHandler{secondFactor: sf, jwt: jwt}
+func NewTwoFAHandler(sf *secondfactor.Handler, jwt *auth.JWTService) (*TwoFAHandler, error) {
+	failures, err := cacheutil.NewCache[int]()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create totp failure cache: %w", err)
+	}
+
+	return &TwoFAHandler{
+		secondFactor: sf,
+		jwt:          jwt,
+		failures:     failures,
+	}, nil
 }
 
 func (h *TwoFAHandler) Init2FA(c *echo.Context) error {
@@ -39,10 +56,19 @@ func (h *TwoFAHandler) VerifyTOTP(c *echo.Context) error {
 		return LoginTOTPError(sessionID, "Code is required.").Render(c.Request().Context(), c.Response())
 	}
 
+	if count, found := h.failures.Get(sessionID); found && count >= maxTOTPAttempts {
+		return LoginTOTPError(sessionID, "Too many attempts. Please start over.").Render(c.Request().Context(), c.Response())
+	}
+
 	token, err := h.secondFactor.ValidatePendingTOTP(c.Request().Context(), sessionID, code)
 	if err != nil {
+		count, _ := h.failures.Get(sessionID)
+		h.failures.SetWithTTL(sessionID, count+1, 1, totpAttemptWindow)
+		h.failures.Wait()
 		return LoginTOTPError(sessionID, "Invalid code. Please try again.").Render(c.Request().Context(), c.Response())
 	}
+
+	h.failures.Del(sessionID)
 
 	claims, err := h.jwt.ValidateToken(token)
 	if err != nil {

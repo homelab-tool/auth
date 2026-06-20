@@ -23,14 +23,15 @@ templ Login2FAChallenge(sessionID string, methods []string) {
 templ LoginTOTPError(sessionID string, msg string) {
 	<div id="login-2fa-section">
 		<h2>Two-Factor Authentication</h2>
-		<p style="color: red;">{ msg }</p>
+		<p id="totp-error" style="color: red;">{ msg }</p>
 		<form hx-post="/login/2fa/totp" hx-target="#login-2fa-section" hx-swap="outerHTML">
 			<input type="hidden" name="sessionId" value={ sessionID }/>
 			<div>
 				<label for="totp-code">Authenticator Code</label>
-				<input type="text" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" required/>
+				<input type="text" id="totp-code" name="code" inputmode="numeric" autocomplete="one-time-code" required oninput="document.getElementById('totp-error')?.remove()"/>
 			</div>
 			<button type="submit">Verify</button>
 		</form>
 	</div>
 }
+

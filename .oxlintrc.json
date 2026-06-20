@@ -12,7 +12,9 @@
         "suspicious": "error",
         "perf": "warn"
     },
-    "rules": {},
+    "rules": {
+        "no-await-in-loop": "off"
+    },
     "env": {
         "builtin": true,
         "es2026": true,

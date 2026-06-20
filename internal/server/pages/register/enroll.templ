@@ -82,7 +82,7 @@ templ TOTPSuccess() {
 templ TOTPError(msg string) {
 	<div id="totp-section">
 		<h2>Authenticator App (TOTP)</h2>
-		<p style="color: red;">{ msg }</p>
+		<p id="totp-error" style="color: red;">{ msg }</p>
 		<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
 			Try Again
 		</button>

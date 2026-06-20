@@ -138,3 +138,87 @@ for (const s of scenarios) {
         });
     });
 }
+
+test("login TOTP rate limiting", async ({ page, app }) => {
+    const username = "ratelimit-user";
+    const password = "test-password";
+    let totpSecret: string | null = null;
+    const profile = new ProfilePage(page, app.authUrl);
+
+    await test.step("register user with TOTP", async () => {
+        const register = new RegisterPage(page, app.authUrl);
+        await register.goto();
+        await register.clientId.fill(username);
+        await register.password.fill(password);
+        await register.confirm.fill(password);
+        await register.opaqueSubmitButton.click();
+        await expect(register.enrollmentSection).toBeVisible();
+
+        const enrollment = new TwoFAEnrollmentPage(page, app.authUrl);
+        await enrollment.setupTOTPButton.click();
+        await expect(enrollment.secretCode).toBeVisible();
+        totpSecret = await enrollment.secretCode.textContent();
+        expect(totpSecret).toBeTruthy();
+        const code = await generateTOTP({ secret: totpSecret! });
+        await enrollment.totpInput.fill(code);
+        await enrollment.verifyButton.click();
+        await expect(enrollment.totpSection).toContainText("successfully");
+
+        await register.continueToProfileLink.click();
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
+        await expect(profile.section2FA).toContainText("Enabled");
+    });
+
+    await test.step("logout", async () => {
+        await profile.logoutButton.click();
+        await expect(page).toHaveURL(`${app.authUrl}/login`);
+    });
+
+    await test.step("exhaust TOTP attempts with wrong codes", async () => {
+        const login = new LoginPage(page, app.authUrl);
+        await login.goto();
+        await login.clientId.fill(username);
+        await login.password.fill(password);
+        await login.submitButton.click();
+
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await expect(challenge.section).toBeVisible();
+        await expect(challenge.totpInput).toBeVisible();
+
+        for (let i = 0; i < 5; i++) {
+            await challenge.totpInput.fill("000000");
+            await challenge.submitButton.click();
+            await expect(challenge.errorMessage).toContainText("Invalid code. Please try again.");
+        }
+
+        await challenge.totpInput.fill("000000");
+        await challenge.submitButton.click();
+        await expect(challenge.errorMessage).toContainText("Too many attempts. Please start over.");
+    });
+
+    await test.step("correct code still blocked during rate limit", async () => {
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        const code = await generateTOTP({ secret: totpSecret! });
+        await expect(challenge.errorMessage).toBeVisible();
+        await challenge.totpInput.fill(code);
+        await challenge.submitButton.click();
+        await expect(challenge.errorMessage).toContainText("Too many attempts. Please start over.");
+    });
+
+    await test.step("fresh login bypasses rate limit", async () => {
+        const login = new LoginPage(page, app.authUrl);
+        await login.goto();
+        await login.clientId.fill(username);
+        await login.password.fill(password);
+        await login.submitButton.click();
+
+        const challenge = new TwoFAChallengePage(page, app.authUrl);
+        await expect(challenge.section).toBeVisible();
+
+        const code = await generateTOTP({ secret: totpSecret! });
+        await challenge.totpInput.fill(code);
+        await challenge.submitButton.click();
+        await expect(page).toHaveURL(`${app.authUrl}/profile`);
+        await expect(profile.section2FA).toContainText("Enabled");
+    });
+});

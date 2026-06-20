@@ -169,7 +169,10 @@ func CreateApp() (*App, error) {
 	e.POST("/auth/set-cookie", layout.SetCookieHandler(svcs.JWT))
 	e.POST("/auth/logout", layout.LogoutHandler)
 
-	twoFAHandler := login.NewTwoFAHandler(sfHandler, svcs.JWT)
+	twoFAHandler, err := login.NewTwoFAHandler(sfHandler, svcs.JWT)
+	if err != nil {
+		return nil, err
+	}
 	e.GET("/login/2fa/init", twoFAHandler.Init2FA)
 	e.POST("/login/2fa/totp", twoFAHandler.VerifyTOTP)
 

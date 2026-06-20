@@ -81,9 +81,7 @@ async function waitForHealth(
     const deadline = Date.now() + CONTAINER_STARTUP_MS;
 
     while (Date.now() < deadline) {
-        // oxlint-disable-next-line no-await-in-loop
         if (await tryPing(url, opts)) return;
-        // oxlint-disable-next-line no-await-in-loop
         await sleep(CONTAINER_POLL_INTERVAL_MS);
     }
 
@@ -167,7 +165,7 @@ export const test = base.extend<{
                 .withNetworkAliases("auth")
                 .withEnvironment({
                     WEBAUTHN_RPID: "localhost",
-                    WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`
+                    WEBAUTHN_RP_ORIGINS: `http://localhost:${hostPort}`,
                 })
                 .withLogConsumer(authLog.consumer)
                 .start();

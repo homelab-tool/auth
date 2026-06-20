@@ -21,4 +21,8 @@ export class TwoFAChallengePage {
     get webauthnButton() {
         return this.page.locator("#webauthn-2fa");
     }
+
+    get errorMessage() {
+        return this.page.locator("#totp-error");
+    }
 }

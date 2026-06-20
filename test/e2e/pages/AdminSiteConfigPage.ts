@@ -36,7 +36,7 @@ export class AdminSiteConfigPage {
         return this.page.locator("form:has(select[name='group_id']) button[type='submit']");
     }
 
-    siteAccessSection(hostname: string) {
+    siteAccessSection(_hostname: string) {
         return this.page.locator(`section[id^='site-access-']`);
     }
 }

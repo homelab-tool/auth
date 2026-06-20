@@ -33,4 +33,12 @@ export class TwoFAEnrollmentPage {
     get webauthnStatus() {
         return this.page.locator("#webauthn-2fa-status");
     }
+
+    get errorMessage() {
+        return this.page.locator("#totp-error");
+    }
+
+    get tryAgainButton() {
+        return this.page.locator("#totp-section button:has-text('Try Again')");
+    }
 }
