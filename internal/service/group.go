@@ -77,6 +77,40 @@ func (s *GroupService) List(ctx context.Context) ([]Group, error) {
 	return groups, rows.Err()
 }
 
+func (s *GroupService) ListWithMembers(ctx context.Context) ([]Group, map[int64][]User, error) {
+	groups, err := s.List(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if len(groups) == 0 {
+		return groups, map[int64][]User{}, nil
+	}
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT ug.group_id, u.id, u.display_name, u.created_at
+		FROM user_groups ug
+		JOIN users u ON ug.user_id = u.id
+		ORDER BY u.display_name
+	`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to list group members: %w", err)
+	}
+	defer rows.Close()
+
+	members := make(map[int64][]User)
+	for rows.Next() {
+		var groupID int64
+		var u User
+		if err := rows.Scan(&groupID, &u.ID, &u.DisplayName, &u.CreatedAt); err != nil {
+			return nil, nil, fmt.Errorf("failed to scan member: %w", err)
+		}
+		members[groupID] = append(members[groupID], u)
+	}
+
+	return groups, members, rows.Err()
+}
+
 func (s *GroupService) GetByID(ctx context.Context, id int64) (*Group, error) {
 	var g Group
 	err := s.db.QueryRowContext(ctx,

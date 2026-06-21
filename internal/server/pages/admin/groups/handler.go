@@ -18,7 +18,7 @@ func NewHandler(groups *service.GroupService, users *service.UserService) *Handl
 }
 
 func (h *Handler) PageHandler(c *echo.Context) error {
-	allGroups, err := h.Groups.List(c.Request().Context())
+	allGroups, members, err := h.Groups.ListWithMembers(c.Request().Context())
 	if err != nil {
 		log.Err(err).Msg("failed to list groups")
 		return c.String(500, "server error")
@@ -30,17 +30,7 @@ func (h *Handler) PageHandler(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	summaries := make([]GroupSummary, 0, len(allGroups))
-	for _, g := range allGroups {
-		count, err := h.Groups.MemberCount(c.Request().Context(), g.ID)
-		if err != nil {
-			log.Err(err).Int64("groupID", g.ID).Msg("failed to get member count")
-			count = 0
-		}
-		summaries = append(summaries, GroupSummary{Group: g, MemberCount: count})
-	}
-
-	return GroupsPage(&GroupsPageData{Groups: summaries, Users: users}).Render(c.Request().Context(), c.Response())
+	return GroupsPage(allGroups, members, users).Render(c.Request().Context(), c.Response())
 }
 
 func (h *Handler) GroupFormHandler(c *echo.Context) error {
@@ -57,19 +47,19 @@ func (h *Handler) CreateHandler(c *echo.Context) error {
 		return c.String(409, "group name already exists")
 	}
 
-	allGroups, err := h.Groups.List(c.Request().Context())
+	allGroups, members, err := h.Groups.ListWithMembers(c.Request().Context())
 	if err != nil {
 		log.Err(err).Msg("failed to list groups")
 		return c.String(500, "server error")
 	}
 
-	summaries := make([]GroupSummary, 0, len(allGroups))
-	for _, g := range allGroups {
-		count, _ := h.Groups.MemberCount(c.Request().Context(), g.ID)
-		summaries = append(summaries, GroupSummary{Group: g, MemberCount: count})
+	users, err := h.Users.ListUsers(c.Request().Context())
+	if err != nil {
+		log.Err(err).Msg("failed to list users")
+		return c.String(500, "server error")
 	}
 
-	return GroupList(summaries).Render(c.Request().Context(), c.Response())
+	return GroupList(allGroups, members, users).Render(c.Request().Context(), c.Response())
 }
 
 func (h *Handler) DeleteHandler(c *echo.Context) error {
@@ -83,46 +73,19 @@ func (h *Handler) DeleteHandler(c *echo.Context) error {
 		return c.String(409, err.Error())
 	}
 
-	allGroups, err := h.Groups.List(c.Request().Context())
+	allGroups, members, err := h.Groups.ListWithMembers(c.Request().Context())
 	if err != nil {
 		log.Err(err).Msg("failed to list groups")
 		return c.String(500, "server error")
 	}
 
-	summaries := make([]GroupSummary, 0, len(allGroups))
-	for _, g := range allGroups {
-		count, _ := h.Groups.MemberCount(c.Request().Context(), g.ID)
-		summaries = append(summaries, GroupSummary{Group: g, MemberCount: count})
-	}
-
-	return GroupList(summaries).Render(c.Request().Context(), c.Response())
-}
-
-func (h *Handler) ManageHandler(c *echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return c.String(400, "invalid id")
-	}
-
-	group, err := h.Groups.GetByID(c.Request().Context(), id)
-	if err != nil {
-		log.Err(err).Int64("id", id).Msg("failed to get group")
-		return c.String(500, "server error")
-	}
-
-	members, err := h.Groups.UsersInGroup(c.Request().Context(), id)
-	if err != nil {
-		log.Err(err).Int64("id", id).Msg("failed to list members")
-		return c.String(500, "server error")
-	}
-
-	allUsers, err := h.Users.ListUsers(c.Request().Context())
+	users, err := h.Users.ListUsers(c.Request().Context())
 	if err != nil {
 		log.Err(err).Msg("failed to list users")
 		return c.String(500, "server error")
 	}
 
-	return GroupDetail(group, members, allUsers).Render(c.Request().Context(), c.Response())
+	return GroupList(allGroups, members, users).Render(c.Request().Context(), c.Response())
 }
 
 func (h *Handler) AddMemberHandler(c *echo.Context) error {
@@ -141,22 +104,7 @@ func (h *Handler) AddMemberHandler(c *echo.Context) error {
 		return c.String(409, "user is already a member")
 	}
 
-	group, err := h.Groups.GetByID(c.Request().Context(), groupID)
-	if err != nil {
-		return c.String(500, "server error")
-	}
-
-	members, err := h.Groups.UsersInGroup(c.Request().Context(), groupID)
-	if err != nil {
-		return c.String(500, "server error")
-	}
-
-	allUsers, err := h.Users.ListUsers(c.Request().Context())
-	if err != nil {
-		return c.String(500, "server error")
-	}
-
-	return GroupDetail(group, members, allUsers).Render(c.Request().Context(), c.Response())
+	return h.renderGroupArticle(c, groupID)
 }
 
 func (h *Handler) RemoveMemberHandler(c *echo.Context) error {
@@ -175,20 +123,27 @@ func (h *Handler) RemoveMemberHandler(c *echo.Context) error {
 		return c.String(409, err.Error())
 	}
 
+	return h.renderGroupArticle(c, groupID)
+}
+
+func (h *Handler) renderGroupArticle(c *echo.Context, groupID int64) error {
 	group, err := h.Groups.GetByID(c.Request().Context(), groupID)
 	if err != nil {
+		log.Err(err).Int64("id", groupID).Msg("failed to get group")
 		return c.String(500, "server error")
 	}
 
 	members, err := h.Groups.UsersInGroup(c.Request().Context(), groupID)
 	if err != nil {
+		log.Err(err).Int64("id", groupID).Msg("failed to list members")
 		return c.String(500, "server error")
 	}
 
 	allUsers, err := h.Users.ListUsers(c.Request().Context())
 	if err != nil {
+		log.Err(err).Msg("failed to list users")
 		return c.String(500, "server error")
 	}
 
-	return GroupDetail(group, members, allUsers).Render(c.Request().Context(), c.Response())
+	return GroupArticle(*group, members, allUsers).Render(c.Request().Context(), c.Response())
 }

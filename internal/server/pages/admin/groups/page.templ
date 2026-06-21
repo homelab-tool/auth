@@ -7,26 +7,16 @@ import (
 	"github.com/homelab-tool/auth/internal/service"
 )
 
-type GroupSummary struct {
-	Group       service.Group
-	MemberCount int
-}
-
-type GroupsPageData struct {
-	Groups []GroupSummary
-	Users  []service.User
-}
-
 func groupPath(id int64) string {
 	return "/admin/groups/" + strconv.FormatInt(id, 10)
 }
 
-func groupDetailID(id int64) string {
-	return "group-detail-" + strconv.FormatInt(id, 10)
+func groupArticleID(id int64) string {
+	return "group-" + strconv.FormatInt(id, 10)
 }
 
 func groupTarget(id int64) string {
-	return "#" + groupDetailID(id)
+	return "#" + groupArticleID(id)
 }
 
 func membersPath(groupID int64) string {
@@ -53,38 +43,20 @@ func confirmRemove(group *service.Group, user service.User) string {
 	return msg
 }
 
-templ GroupsPage(data *GroupsPageData) {
+templ GroupsPage(groups []service.Group, members map[int64][]service.User, allUsers []service.User) {
 	@layout.Page("Groups") {
 		<h1>Groups</h1>
 		<div id="group-error"></div>
 		<button hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>
 		<div id="create-form"></div>
-		@GroupList(data.Groups)
+		@GroupList(groups, members, allUsers)
 	}
 }
 
-templ GroupList(groups []GroupSummary) {
+templ GroupList(groups []service.Group, members map[int64][]service.User, allUsers []service.User) {
 	<section id="group-list">
-		for _, s := range groups {
-			<article>
-				<header>
-					<strong>{ s.Group.Name }</strong>
-					if s.Group.IsAdmin {
-						<small>Admin</small>
-					}
-					<small>{ s.MemberCount } member(s)</small>
-					<button
-						hx-delete={ groupPath(s.Group.ID) }
-						hx-target="#group-list"
-						hx-target-error="#group-error"
-						hx-swap="outerHTML"
-						hx-confirm={ confirmDelete(&s.Group) }
-					>Delete</button>
-				</header>
-				<p>{ s.Group.Description }</p>
-				<button hx-get={ groupPath(s.Group.ID) } hx-target={ groupTarget(s.Group.ID) } hx-swap="innerHTML" hx-trigger="click once">Manage</button>
-				<div id={ groupDetailID(s.Group.ID) }></div>
-			</article>
+		for _, g := range groups {
+			@GroupArticle(g, members[g.ID], allUsers)
 		}
 	</section>
 }
@@ -109,9 +81,24 @@ templ GroupForm() {
 	</form>
 }
 
-templ GroupDetail(group *service.Group, members []service.User, allUsers []service.User) {
-	<section id={ groupDetailID(group.ID) }>
-		<h3>Members</h3>
+templ GroupArticle(group service.Group, members []service.User, allUsers []service.User) {
+	<article id={ groupArticleID(group.ID) }>
+		<header>
+			<strong>{ group.Name }</strong>
+			if group.IsAdmin {
+				<small>Admin</small>
+			}
+			<small>{ len(members) } member(s)</small>
+			<button
+				hx-delete={ groupPath(group.ID) }
+				hx-target="#group-list"
+				hx-target-error="#group-error"
+				hx-swap="outerHTML"
+				hx-confirm={ confirmDelete(&group) }
+			>Delete</button>
+		</header>
+		<p>{ group.Description }</p>
+		<h4>Members</h4>
 		if group.IsAdmin {
 			<p>Admin group</p>
 		}
@@ -124,7 +111,7 @@ templ GroupDetail(group *service.Group, members []service.User, allUsers []servi
 							hx-delete={ memberPath(group.ID, m.ID) }
 							hx-target={ groupTarget(group.ID) }
 							hx-swap="outerHTML"
-							hx-confirm={ confirmRemove(group, m) }
+							hx-confirm={ confirmRemove(&group, m) }
 						>Remove</button>
 					</li>
 				}
@@ -141,5 +128,5 @@ templ GroupDetail(group *service.Group, members []service.User, allUsers []servi
 			</select>
 			<button type="submit">Add</button>
 		</form>
-	</section>
+	</article>
 }

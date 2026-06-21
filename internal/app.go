@@ -223,7 +223,6 @@ func CreateApp() (*App, error) {
 	adminGroup.GET("/groups/new", grpHandler.GroupFormHandler)
 	adminGroup.POST("/groups", grpHandler.CreateHandler)
 	adminGroup.DELETE("/groups/:id", grpHandler.DeleteHandler)
-	adminGroup.GET("/groups/:id", grpHandler.ManageHandler)
 	adminGroup.POST("/groups/:id/members", grpHandler.AddMemberHandler)
 	adminGroup.DELETE("/groups/:id/members/:userID", grpHandler.RemoveMemberHandler)
 

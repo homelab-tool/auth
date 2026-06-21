@@ -51,16 +51,15 @@ test("admin groups management", async ({ page, app }) => {
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
         await groups.goto();
-        await groups.manageButton("Family").click();
-        await groups.memberSelect().selectOption({ label: "family-user" });
-        await groups.addMemberButton().click();
-        await expect(groups.memberList()).toContainText("family-user");
+        await groups.memberSelect("Family").selectOption({ label: "family-user" });
+        await groups.addMemberButton("Family").click();
+        await expect(groups.groupCard("Family")).toContainText("family-user");
     });
 
     await test.step("remove member from group", async () => {
         page.once("dialog", (dialog) => dialog.accept());
-        await groups.removeMemberButton("family-user").click();
-        await expect(groups.groupList).toContainText("No members");
+        await groups.removeMemberButton("Family", "family-user").click();
+        await expect(groups.groupCard("Family")).toContainText("No members");
     });
 
     await test.step("delete the group", async () => {
