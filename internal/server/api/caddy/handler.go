@@ -69,5 +69,3 @@ func (h *Handler) forwardAuth(c *echo.Context) error {
 
 	return c.NoContent(200)
 }
-
-

@@ -12,8 +12,8 @@ import (
 	"github.com/dgraph-io/ristretto/v2"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/auth"
+	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
@@ -340,7 +340,3 @@ func generateSessionID() string {
 	_, _ = rand.Read(b)
 	return base64.RawURLEncoding.EncodeToString(b)
 }
-
-
-
-

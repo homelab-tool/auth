@@ -77,5 +77,3 @@ func UserIDFromWebAuthnID(id []byte) (int64, error) {
 	}
 	return int64(binary.BigEndian.Uint64(id)), nil
 }
-
-

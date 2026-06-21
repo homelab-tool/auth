@@ -33,16 +33,16 @@ type App struct {
 }
 
 type Services struct {
-	JWT           *auth.JWTService
-	WebAuthn      *auth.WebAuthnService
-	Users         *service.UserService
-	Opaque        *service.OpaqueService
-	Credentials   *service.CredentialService
-	SecondFactor  service.SecondFactorService
-	TOTP          *service.TOTPService
-	SiteConfigs   *service.SiteConfigService
-	Groups        *service.GroupService
-	OpaqueServer  *bytemareopaque.Server
+	JWT          *auth.JWTService
+	WebAuthn     *auth.WebAuthnService
+	Users        *service.UserService
+	Opaque       *service.OpaqueService
+	Credentials  *service.CredentialService
+	SecondFactor service.SecondFactorService
+	TOTP         *service.TOTPService
+	SiteConfigs  *service.SiteConfigService
+	Groups       *service.GroupService
+	OpaqueServer *bytemareopaque.Server
 }
 
 func InitServices(db *sql.DB, secondFactorSvc service.SecondFactorService) (*Services, error) {

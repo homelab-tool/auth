@@ -155,10 +155,10 @@ func DeletePasskeyHandler(jwt *auth.JWTService, credentials *service.CredentialS
 			return c.Redirect(302, "/login")
 		}
 
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
-	if err != nil {
-		return c.String(400, "invalid id")
-	}
+		id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			return c.String(400, "invalid id")
+		}
 
 		if err := credentials.Delete(c.Request().Context(), id); err != nil {
 			log.Err(err).Int64("id", id).Int64("userID", userID).Msg("failed to delete credential")

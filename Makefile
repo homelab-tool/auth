@@ -11,6 +11,7 @@ vet:
 	go vet ./...
 
 fmt:
+	go fmt ./...
 	go tool templ fmt .
 	pnpm run format
 

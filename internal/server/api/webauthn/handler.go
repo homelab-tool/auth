@@ -327,9 +327,9 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 		}
 
 		return c.JSON(200, map[string]any{
-				"status":     "2fa_required",
-				"session_id": result.SessionID,
-			})
+			"status":     "2fa_required",
+			"session_id": result.SessionID,
+		})
 	}
 
 	token, err := h.jwtService.GenerateToken(webAuthnUser.ID)

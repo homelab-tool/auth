@@ -41,7 +41,7 @@ func (k *KSFSettings) ClientOptions() *opaque.ClientOptions {
 }
 
 func (k *KSFSettings) Identifier() ksf.Identifier {
-	return ksf.Argon2id;
+	return ksf.Argon2id
 }
 
 // DefaultKSF returns the default KSF settings.
