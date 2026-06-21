@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,9 +13,7 @@ import (
 )
 
 func ParseUserID(subject string) (int64, error) {
-	var userID int64
-	_, err := fmt.Sscanf(subject, "%d", &userID)
-	return userID, err
+	return strconv.ParseInt(subject, 10, 64)
 }
 
 const jwtSecretName = "jwt_secret"
