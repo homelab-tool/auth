@@ -2,13 +2,14 @@ package register
 
 import (
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/server/pages/static"
 )
 
 templ TOTPSetupPage(secret string, uri string) {
 	@layout.Page("Set Up Authenticator App") {
 		@TOTPSetupForm(secret, uri, "/register/2fa/totp/verify", "/profile")
 		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
-		<script type="module" src="/static/pages/enroll.js"></script>
+		<script type="module" src={ static.StaticURL("/pages/enroll.js") }></script>
 	}
 }
 
@@ -21,7 +22,7 @@ templ WebAuthnSetupPage() {
 			<div id="webauthn-2fa-status"></div>
 		</div>
 		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
-		<script type="module" src="/static/pages/enroll.js"></script>
+		<script type="module" src={ static.StaticURL("/pages/enroll.js") }></script>
 	}
 }
 
@@ -46,7 +47,7 @@ templ EnrollmentPage() {
 		<hr/>
 		<a href="/profile" role="button">Continue to profile</a>
 	</div>
-	<script type="module" src="/static/pages/enroll.js"></script>
+	<script type="module" src={ static.StaticURL("/pages/enroll.js") }></script>
 }
 
 templ TOTPSetupForm(secret string, uri string, verifyEndpoint string, redirectOnSuccess string) {

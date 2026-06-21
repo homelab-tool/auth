@@ -1,6 +1,9 @@
 package login
 
-import "github.com/homelab-tool/auth/internal/server/pages/layout"
+import (
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/server/pages/static"
+)
 
 templ Page() {
   @layout.Page("Login") {
@@ -18,6 +21,6 @@ templ Page() {
     </form>
     <button id="passkey-login" type="button">Login with Passkey</button>
     <div id="login-2fa-section"></div>
-    <script type="module" src="/static/pages/login.js"></script>
+    <script type="module" src={ static.StaticURL("/pages/login.js") }></script>
   }
 }

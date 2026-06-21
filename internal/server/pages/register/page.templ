@@ -1,6 +1,9 @@
 package register
 
-import "github.com/homelab-tool/auth/internal/server/pages/layout"
+import (
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/server/pages/static"
+)
 
 templ Page() {
   @layout.Page("Register") {
@@ -32,6 +35,6 @@ templ Page() {
         <button type="submit">Register with Passkey</button>
       </form>
     </div>
-    <script type="module" src="/static/pages/register.js"></script>
+    <script type="module" src={ static.StaticURL("/pages/register.js") }></script>
   }
 }

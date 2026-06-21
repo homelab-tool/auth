@@ -1,5 +1,7 @@
 package login
 
+import "github.com/homelab-tool/auth/internal/server/pages/static"
+
 templ Login2FAChallenge(sessionID string, methods []string) {
 	<div id="login-2fa-section">
 		<h2>Two-Factor Authentication</h2>
@@ -16,7 +18,7 @@ templ Login2FAChallenge(sessionID string, methods []string) {
 		if hasMethod(methods, "webauthn") {
 			<button id="webauthn-2fa" type="button" data-session-id={ sessionID }>Use Security Key</button>
 		}
-		<script type="module" src="/static/pages/login-2fa.js"></script>
+		<script type="module" src={ static.StaticURL("/pages/login-2fa.js") }></script>
 	</div>
 }
 

@@ -3,6 +3,7 @@ package profile
 import (
 	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
+	"github.com/homelab-tool/auth/internal/server/pages/static"
 )
 
 func has2FA(methods []string, method string) bool {
@@ -127,7 +128,7 @@ templ PasswordSetupPage(displayName string) {
 			<button type="submit">Set Password</button>
 		</form>
 		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
-		<script type="module" src="/static/pages/password-setup.js"></script>
+		<script type="module" src={ static.StaticURL("/pages/password-setup.js") }></script>
 	}
 }
 
@@ -150,6 +151,6 @@ templ AddPasskeyPage() {
 			<button type="submit">Create Passkey</button>
 		</form>
 		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
-		<script type="module" src="/static/pages/add-passkey.js"></script>
+		<script type="module" src={ static.StaticURL("/pages/add-passkey.js") }></script>
 	}
 }

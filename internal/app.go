@@ -166,7 +166,15 @@ func CreateApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
-	e.StaticFS("/static", subFS)
+	if err := static.InitManifest(subFS); err != nil {
+		return nil, err
+	}
+	e.StaticFS("/static", subFS, func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c *echo.Context) error {
+			c.Response().Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+			return next(c)
+		}
+	})
 
 	e.GET("/", func(c *echo.Context) error {
 		return c.Redirect(307, "/profile")
