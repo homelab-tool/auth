@@ -168,6 +168,10 @@ func CreateApp() (*App, error) {
 	}
 	e.StaticFS("/static", subFS)
 
+	e.GET("/", func(c *echo.Context) error {
+		return c.Redirect(307, "/profile")
+	})
+
 	e.GET("/login", login.PageHandler)
 	e.GET("/register", register.PageHandler)
 	e.GET("/profile", profile.PageHandler(svcs.JWT, svcs.Users, svcs.SecondFactor, svcs.Credentials))
