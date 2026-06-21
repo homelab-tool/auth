@@ -1,6 +1,7 @@
 package webauthn
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -27,7 +28,7 @@ const (
 type Session struct {
 	sessionData *webauthn.SessionData
 	userID      int64
-	purpose     string
+	purpose     service.CredentialPurpose
 	name        string
 }
 
@@ -106,10 +107,6 @@ func validateDisplayName(name string) error {
 		return fmt.Errorf("display name too long: %d bytes", len(name))
 	}
 	return nil
-}
-
-func isValidPurpose(purpose string) bool {
-	return purpose == "login" || purpose == "2fa" || purpose == "login,2fa"
 }
 
 func (h *Handler) registerStart(c *echo.Context) error {
@@ -197,7 +194,7 @@ func (h *Handler) registerFinish(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, "login", ""); err != nil {
+	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, service.PurposeLogin, ""); err != nil {
 		log.Err(err).Msg("failed to persist credential")
 		h.cache.Del(challenge)
 
@@ -292,13 +289,13 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	if purpose == "2fa" {
+	if purpose.TwoFA && !purpose.Login {
 		return c.String(401, "invalid credentials")
 	}
 
 	var methods []string
 
-	if purpose == "login" {
+	if purpose.Login {
 		totpOK, err := h.totpService.HasEnabled(c.Request().Context(), webAuthnUser.ID)
 		if err != nil {
 			log.Err(err).Int64("userID", webAuthnUser.ID).Msg("failed to check totp")
@@ -315,7 +312,7 @@ func (h *Handler) loginFinish(c *echo.Context) error {
 		}
 
 		for _, c2 := range other2faCreds {
-			if c2.ID != int64(validatedCredential.Authenticator.SignCount) {
+			if !bytes.Equal(c2.CredentialID, validatedCredential.ID) {
 				methods = append(methods, "webauthn")
 				break
 			}
@@ -351,7 +348,8 @@ func (h *Handler) addStart(c *echo.Context) error {
 		return c.String(400, "invalid request")
 	}
 
-	if !isValidPurpose(request.Purpose) {
+	purpose, err := service.ParseCredentialPurpose(request.Purpose)
+	if err != nil {
 		return c.String(400, "invalid purpose")
 	}
 
@@ -389,7 +387,7 @@ func (h *Handler) addStart(c *echo.Context) error {
 	opts := []webauthn.RegistrationOption{
 		webauthn.WithExtensions(protocol.AuthenticationExtensions{"credProps": true}),
 	}
-	if request.Purpose == "login" || request.Purpose == "login,2fa" {
+	if purpose.Login {
 		opts = append(opts, webauthn.WithResidentKeyRequirement(protocol.ResidentKeyRequirementRequired))
 	}
 
@@ -399,7 +397,7 @@ func (h *Handler) addStart(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID, purpose: request.Purpose, name: request.Name}, 1, 2*time.Minute)
+	h.cache.SetWithTTL(sessionData.Challenge, &Session{sessionData: sessionData, userID: userID, purpose: purpose, name: request.Name}, 1, 2*time.Minute)
 	h.cache.Wait()
 
 	return c.JSON(200, creation)
@@ -443,8 +441,8 @@ func (h *Handler) addFinish(c *echo.Context) error {
 	}
 
 	purpose := s.purpose
-	if purpose == "" {
-		purpose = "login"
+	if !purpose.Login && !purpose.TwoFA {
+		purpose = service.PurposeLogin
 	}
 
 	if err := h.credentialService.Persist(c.Request().Context(), s.userID, credential, purpose, s.name); err != nil {

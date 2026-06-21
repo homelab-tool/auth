@@ -9,11 +9,51 @@ import (
 	"github.com/go-webauthn/webauthn/webauthn"
 )
 
+type CredentialPurpose struct {
+	Login bool
+	TwoFA bool
+}
+
+var (
+	PurposeLogin    = CredentialPurpose{Login: true}
+	Purpose2FA      = CredentialPurpose{TwoFA: true}
+	PurposeLogin2FA = CredentialPurpose{Login: true, TwoFA: true}
+)
+
+func (p CredentialPurpose) String() string {
+	switch {
+	case p.Login && p.TwoFA:
+		return "login,2fa"
+	case p.Login:
+		return "login"
+	case p.TwoFA:
+		return "2fa"
+	default:
+		return ""
+	}
+}
+
+func ParseCredentialPurpose(s string) (CredentialPurpose, error) {
+	switch s {
+	case "login":
+		return PurposeLogin, nil
+	case "2fa":
+		return Purpose2FA, nil
+	case "login,2fa":
+		return PurposeLogin2FA, nil
+	case "":
+		return CredentialPurpose{}, nil
+	default:
+		return CredentialPurpose{}, fmt.Errorf("invalid credential purpose: %q", s)
+	}
+}
+
 type CredentialInfo struct {
-	ID        int64
-	Name      string
-	Purpose   string
-	CreatedAt string
+	ID           int64
+	CredentialID []byte
+	Name         string
+	Purpose      CredentialPurpose
+	CreatedAt    string
 }
 
 type CredentialService struct {
@@ -24,7 +64,7 @@ func NewCredentialService(db *sql.DB) *CredentialService {
 	return &CredentialService{db: db}
 }
 
-func (s *CredentialService) Persist(ctx context.Context, userID int64, credential *webauthn.Credential, purpose, name string) error {
+func (s *CredentialService) Persist(ctx context.Context, userID int64, credential *webauthn.Credential, purpose CredentialPurpose, name string) error {
 	transportStrs := make([]string, len(credential.Transport))
 	for i, t := range credential.Transport {
 		transportStrs[i] = string(t)
@@ -46,7 +86,7 @@ func (s *CredentialService) Persist(ctx context.Context, userID int64, credentia
 		credential.Authenticator.CloneWarning,
 		credential.Flags.BackupEligible,
 		credential.Flags.BackupState,
-		purpose,
+		purpose.String(),
 		name,
 	)
 	return err
@@ -66,19 +106,19 @@ func (s *CredentialService) Update(ctx context.Context, credential *webauthn.Cre
 	return err
 }
 
-func (s *CredentialService) GetPurpose(ctx context.Context, credentialID []byte) (string, error) {
+func (s *CredentialService) GetPurpose(ctx context.Context, credentialID []byte) (CredentialPurpose, error) {
 	var purpose string
 	err := s.db.QueryRowContext(ctx,
 		"SELECT purpose FROM webauthn_credentials WHERE credential_id = ?", credentialID).Scan(&purpose)
 	if err != nil {
-		return "", err
+		return CredentialPurpose{}, err
 	}
-	return purpose, nil
+	return ParseCredentialPurpose(purpose)
 }
 
 func (s *CredentialService) List(ctx context.Context, userID int64) ([]CredentialInfo, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, purpose, created_at
+		`SELECT id, credential_id, name, purpose, created_at
 		 FROM webauthn_credentials WHERE user_id = ?
 		 ORDER BY created_at`, userID)
 	if err != nil {
@@ -89,8 +129,14 @@ func (s *CredentialService) List(ctx context.Context, userID int64) ([]Credentia
 	var creds []CredentialInfo
 	for rows.Next() {
 		var c CredentialInfo
-		if err := rows.Scan(&c.ID, &c.Name, &c.Purpose, &c.CreatedAt); err != nil {
+		var purposeStr string
+		if err := rows.Scan(&c.ID, &c.CredentialID, &c.Name, &purposeStr, &c.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan credential: %w", err)
+		}
+		var err error
+		c.Purpose, err = ParseCredentialPurpose(purposeStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse credential purpose: %w", err)
 		}
 		creds = append(creds, c)
 	}
@@ -99,7 +145,7 @@ func (s *CredentialService) List(ctx context.Context, userID int64) ([]Credentia
 
 func (s *CredentialService) ListBy2FAPurpose(ctx context.Context, userID int64) ([]CredentialInfo, error) {
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT id, name, purpose, created_at
+		`SELECT id, credential_id, name, purpose, created_at
 		 FROM webauthn_credentials WHERE user_id = ? AND purpose IN ('2fa', 'login,2fa')
 		 ORDER BY created_at`, userID)
 	if err != nil {
@@ -110,18 +156,24 @@ func (s *CredentialService) ListBy2FAPurpose(ctx context.Context, userID int64) 
 	var creds []CredentialInfo
 	for rows.Next() {
 		var c CredentialInfo
-		if err := rows.Scan(&c.ID, &c.Name, &c.Purpose, &c.CreatedAt); err != nil {
+		var purposeStr string
+		if err := rows.Scan(&c.ID, &c.CredentialID, &c.Name, &purposeStr, &c.CreatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan credential: %w", err)
+		}
+		var err error
+		c.Purpose, err = ParseCredentialPurpose(purposeStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse credential purpose: %w", err)
 		}
 		creds = append(creds, c)
 	}
 	return creds, rows.Err()
 }
 
-func (s *CredentialService) UpdatePurpose(ctx context.Context, credentialID int64, purpose string) error {
+func (s *CredentialService) UpdatePurpose(ctx context.Context, credentialID int64, purpose CredentialPurpose) error {
 	result, err := s.db.ExecContext(ctx,
 		"UPDATE webauthn_credentials SET purpose = ? WHERE id = ?",
-		purpose, credentialID)
+		purpose.String(), credentialID)
 	if err != nil {
 		return fmt.Errorf("failed to update purpose: %w", err)
 	}

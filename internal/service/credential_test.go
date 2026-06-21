@@ -32,7 +32,7 @@ func TestCredentialServicePersist(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), userID, cred, "login", "test passkey")
+	err := svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "test passkey")
 	require.NoError(t, err)
 
 	var count int
@@ -52,10 +52,10 @@ func TestCredentialServicePersistDuplicateCredentialID(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), userID, cred, "login", "")
+	err := svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "")
 	require.NoError(t, err)
 
-	err = svc.Persist(context.Background(), userID, cred, "login", "")
+	err = svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "")
 	assert.ErrorContains(t, err, "UNIQUE constraint")
 }
 
@@ -69,7 +69,7 @@ func TestCredentialServicePersistMissingUser(t *testing.T) {
 		AttestationType: "none",
 	}
 
-	err := svc.Persist(context.Background(), 999, cred, "login", "")
+	err := svc.Persist(context.Background(), 999, cred, service.PurposeLogin, "")
 	assert.ErrorContains(t, err, "FOREIGN KEY constraint")
 }
 
@@ -83,7 +83,7 @@ func TestCredentialServiceUpdate(t *testing.T) {
 		PublicKey:       []byte("pubkey"),
 		AttestationType: "none",
 	}
-	err := svc.Persist(context.Background(), userID, cred, "login", "")
+	err := svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "")
 	require.NoError(t, err)
 
 	cred.Authenticator.SignCount = 5
@@ -107,7 +107,7 @@ func TestCredentialServiceUpdateStaleSignCount(t *testing.T) {
 		AttestationType: "none",
 	}
 	cred.Authenticator.SignCount = 10
-	err := svc.Persist(context.Background(), userID, cred, "login", "")
+	err := svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "")
 	require.NoError(t, err)
 
 	cred.Authenticator.SignCount = 5
@@ -130,12 +130,12 @@ func TestCredentialServiceGetPurpose(t *testing.T) {
 		PublicKey:       []byte("pubkey"),
 		AttestationType: "none",
 	}
-	err := svc.Persist(context.Background(), userID, cred, "login", "")
+	err := svc.Persist(context.Background(), userID, cred, service.PurposeLogin, "")
 	require.NoError(t, err)
 
 	purpose, err := svc.GetPurpose(context.Background(), cred.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "login", purpose)
+	assert.Equal(t, service.PurposeLogin, purpose)
 }
 
 func TestCredentialServiceListBy2FAPurpose(t *testing.T) {
@@ -146,11 +146,11 @@ func TestCredentialServiceListBy2FAPurpose(t *testing.T) {
 	cred1 := &webauthn.Credential{ID: []byte("cred-1"), PublicKey: []byte("pk1"), AttestationType: "none"}
 	cred2 := &webauthn.Credential{ID: []byte("cred-2"), PublicKey: []byte("pk2"), AttestationType: "none"}
 
-	require.NoError(t, svc.Persist(context.Background(), userID, cred1, "login", ""))
-	require.NoError(t, svc.Persist(context.Background(), userID, cred2, "2fa", ""))
+	require.NoError(t, svc.Persist(context.Background(), userID, cred1, service.PurposeLogin, ""))
+	require.NoError(t, svc.Persist(context.Background(), userID, cred2, service.Purpose2FA, ""))
 
 	creds, err := svc.ListBy2FAPurpose(context.Background(), userID)
 	require.NoError(t, err)
 	assert.Len(t, creds, 1)
-	assert.Equal(t, "2fa", creds[0].Purpose)
+	assert.Equal(t, service.Purpose2FA, creds[0].Purpose)
 }

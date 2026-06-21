@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"github.com/homelab-tool/auth/internal/service"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
 )
 
@@ -13,16 +14,16 @@ func has2FA(methods []string, method string) bool {
 	return false
 }
 
-func purposeDisplay(purpose string) string {
-	switch purpose {
-	case "login":
-		return "Login"
-	case "2fa":
-		return "2FA"
-	case "login,2fa":
+func purposeDisplay(purpose service.CredentialPurpose) string {
+	switch {
+	case purpose.Login && purpose.TwoFA:
 		return "Login + 2FA"
+	case purpose.Login:
+		return "Login"
+	case purpose.TwoFA:
+		return "2FA"
 	}
-	return purpose
+	return ""
 }
 
 templ Page(data *ProfileData) {
