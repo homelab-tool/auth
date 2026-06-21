@@ -9,6 +9,7 @@ import (
 	"github.com/homelab-tool/auth/internal/auth"
 	"github.com/homelab-tool/auth/internal/server/api/cacheutil"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
+	"github.com/homelab-tool/auth/internal/server/pages/layout"
 	"github.com/labstack/echo/v5"
 	"github.com/rs/zerolog/log"
 )
@@ -82,6 +83,7 @@ func (h *TwoFAHandler) VerifyTOTP(c *echo.Context) error {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
+		Secure:   layout.IsSecureConnection(c),
 		Expires:  claims.ExpiresAt.Time,
 	})
 

@@ -8,6 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func IsSecureConnection(c *echo.Context) bool {
+	return c.Request().TLS != nil || c.Request().Header.Get("X-Forwarded-Proto") == "https"
+}
+
 func SetCookieHandler(jwt *auth.JWTService) echo.HandlerFunc {
 	return func(c *echo.Context) error {
 		token := c.FormValue("token")
@@ -27,6 +31,7 @@ func SetCookieHandler(jwt *auth.JWTService) echo.HandlerFunc {
 			Path:     "/",
 			HttpOnly: true,
 			SameSite: http.SameSiteStrictMode,
+			Secure:   IsSecureConnection(c),
 			Expires:  claims.ExpiresAt.Time,
 		})
 
