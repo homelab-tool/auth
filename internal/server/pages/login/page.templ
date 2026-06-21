@@ -6,21 +6,21 @@ import (
 )
 
 templ Page() {
-  @layout.Page("Login") {
-    <h1>Login</h1>
-    <form id="login-form">
-      <div>
-        <label for="clientId">Username</label>
-        <input type="text" id="clientId" name="clientId" required autocomplete="username"/>
-      </div>
-      <div>
-        <label for="password">Password</label>
-        <input type="password" id="password" required autocomplete="current-password"/>
-      </div>
-      <button type="submit">Log In</button>
-    </form>
-    <button id="passkey-login" type="button">Login with Passkey</button>
-    <div id="login-2fa-section"></div>
-    <script type="module" src={ static.StaticURL("/pages/login.js") }></script>
-  }
+	@layout.Page("Login") {
+		<h1>Login</h1>
+		<form id="login-form">
+			<div>
+				<label for="clientId">Username</label>
+				<input type="text" id="clientId" name="clientId" required autocomplete="username"/>
+			</div>
+			<div>
+				<label for="password">Password</label>
+				<input type="password" id="password" required autocomplete="current-password"/>
+			</div>
+			<button type="submit">Log In</button>
+		</form>
+		<button id="passkey-login" type="button">Login with Passkey</button>
+		<div id="login-2fa-section"></div>
+		<script type="module" src={ static.StaticURL("/pages/login.js") }></script>
+	}
 }

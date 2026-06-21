@@ -10,6 +10,10 @@ test-verbose:
 vet:
 	go vet ./...
 
+fmt:
+	go tool templ fmt .
+	pnpm run format
+
 run: generate
 	go run ./cmd/auth/...
 

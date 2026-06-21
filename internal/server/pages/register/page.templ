@@ -6,35 +6,35 @@ import (
 )
 
 templ Page() {
-  @layout.Page("Register") {
-    <h1>Register</h1>
-    <div id="register-methods">
-      <h2>Register with Password</h2>
-      <form id="register-opaque-form">
-        <div>
-          <label for="clientId">Username</label>
-          <input type="text" id="clientId" name="clientId" required autocomplete="username"/>
-        </div>
-        <div>
-          <label for="password">Password</label>
-          <input type="password" id="password" required autocomplete="new-password"/>
-        </div>
-        <div>
-          <label for="confirm">Confirm Password</label>
-          <input type="password" id="confirm" required autocomplete="new-password"/>
-        </div>
-        <button type="submit">Register with Password</button>
-      </form>
-      <hr/>
-      <h2>Register with Passkey</h2>
-      <form id="register-webauthn-form">
-        <div>
-          <label for="webauthn-displayName">Display Name</label>
-          <input type="text" id="webauthn-displayName" name="displayName" required/>
-        </div>
-        <button type="submit">Register with Passkey</button>
-      </form>
-    </div>
-    <script type="module" src={ static.StaticURL("/pages/register.js") }></script>
-  }
+	@layout.Page("Register") {
+		<h1>Register</h1>
+		<div id="register-methods">
+			<h2>Register with Password</h2>
+			<form id="register-opaque-form">
+				<div>
+					<label for="clientId">Username</label>
+					<input type="text" id="clientId" name="clientId" required autocomplete="username"/>
+				</div>
+				<div>
+					<label for="password">Password</label>
+					<input type="password" id="password" required autocomplete="new-password"/>
+				</div>
+				<div>
+					<label for="confirm">Confirm Password</label>
+					<input type="password" id="confirm" required autocomplete="new-password"/>
+				</div>
+				<button type="submit">Register with Password</button>
+			</form>
+			<hr/>
+			<h2>Register with Passkey</h2>
+			<form id="register-webauthn-form">
+				<div>
+					<label for="webauthn-displayName">Display Name</label>
+					<input type="text" id="webauthn-displayName" name="displayName" required/>
+				</div>
+				<button type="submit">Register with Passkey</button>
+			</form>
+		</div>
+		<script type="module" src={ static.StaticURL("/pages/register.js") }></script>
+	}
 }

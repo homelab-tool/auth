@@ -55,14 +55,18 @@ templ Page(data []service.SiteConfig) {
 					for _, cfg := range data {
 						<li>
 							<strong>{ cfg.Hostname }</strong>
-							<button hx-delete={ siteConfigPath(cfg.ID) }
+							<button
+								hx-delete={ siteConfigPath(cfg.ID) }
 								hx-target="#site-config-list"
 								hx-swap="outerHTML"
-								hx-confirm={ confirmDeleteSite(cfg.Hostname) }>Delete</button>
-							<button hx-get={ siteConfigPath(cfg.ID) }
+								hx-confirm={ confirmDeleteSite(cfg.Hostname) }
+							>Delete</button>
+							<button
+								hx-get={ siteConfigPath(cfg.ID) }
 								hx-target={ siteAccessTarget(cfg.ID) }
 								hx-swap="innerHTML"
-								hx-trigger="click once">Manage</button>
+								hx-trigger="click once"
+							>Manage</button>
 							<div id={ siteAccessID(cfg.ID) }></div>
 						</li>
 					}
@@ -82,9 +86,11 @@ templ SiteAccessSection(site *service.SiteConfig, groups []service.Group, allUse
 				for _, g := range siteGroups {
 					<li>
 						{ g.Name }
-						<button hx-delete={ revokeGroupSitePath(site.ID, g.ID) }
+						<button
+							hx-delete={ revokeGroupSitePath(site.ID, g.ID) }
 							hx-target={ siteAccessTarget(site.ID) }
-							hx-swap="outerHTML">Revoke</button>
+							hx-swap="outerHTML"
+						>Revoke</button>
 					</li>
 				}
 			</ul>
@@ -106,9 +112,11 @@ templ SiteAccessSection(site *service.SiteConfig, groups []service.Group, allUse
 				for _, u := range siteUsers {
 					<li>
 						{ u.DisplayName }
-						<button hx-delete={ revokeUserSitePath(site.ID, u.ID) }
+						<button
+							hx-delete={ revokeUserSitePath(site.ID, u.ID) }
 							hx-target={ siteAccessTarget(site.ID) }
-							hx-swap="outerHTML">Revoke</button>
+							hx-swap="outerHTML"
+						>Revoke</button>
 					</li>
 				}
 			</ul>

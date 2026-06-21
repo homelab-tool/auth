@@ -73,11 +73,13 @@ templ GroupList(groups []GroupSummary) {
 						<small>Admin</small>
 					}
 					<small>{ s.MemberCount } member(s)</small>
-					<button hx-delete={ groupPath(s.Group.ID) }
+					<button
+						hx-delete={ groupPath(s.Group.ID) }
 						hx-target="#group-list"
 						hx-target-error="#group-error"
 						hx-swap="outerHTML"
-						hx-confirm={ confirmDelete(&s.Group) }>Delete</button>
+						hx-confirm={ confirmDelete(&s.Group) }
+					>Delete</button>
 				</header>
 				<p>{ s.Group.Description }</p>
 				<button hx-get={ groupPath(s.Group.ID) } hx-target={ groupTarget(s.Group.ID) } hx-swap="innerHTML" hx-trigger="click once">Manage</button>
@@ -118,11 +120,12 @@ templ GroupDetail(group *service.Group, members []service.User, allUsers []servi
 				for _, m := range members {
 					<li>
 						{ m.DisplayName }
-						<button hx-delete={ memberPath(group.ID, m.ID) }
+						<button
+							hx-delete={ memberPath(group.ID, m.ID) }
 							hx-target={ groupTarget(group.ID) }
-
 							hx-swap="outerHTML"
-							hx-confirm={ confirmRemove(group, m) }>Remove</button>
+							hx-confirm={ confirmRemove(group, m) }
+						>Remove</button>
 					</li>
 				}
 			</ul>
