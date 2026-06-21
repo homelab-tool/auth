@@ -40,9 +40,6 @@ copy-htmx: js-build
 js-build:
 	pnpm build
 
-js-watch:
-	pnpm watch
-
 generate: templ-gen js-build copy-htmx
 
 .PHONY: test test-race test-verbose vet run build e2e e2e-ui e2e-build templ-gen copy-htmx js-build js-watch generate dev

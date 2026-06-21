@@ -3,7 +3,7 @@ RUN apk add --no-cache make
 RUN npm install -g pnpm@10.33.0
 WORKDIR /app
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml rolldown.config.mjs Makefile ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml rolldown.config.mjs Makefile ./copy-assets.mjs ./
 RUN pnpm install --ignore-scripts
 
 COPY internal/server/pages/ internal/server/pages/

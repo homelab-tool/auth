@@ -6,11 +6,11 @@
     "license": "AGPL-3.0-only",
     "author": "erri120",
     "scripts": {
-        "build": "pnpm exec rolldown -c",
-        "watch": "pnpm exec rolldown -c --watch",
+        "build": "pnpm exec rolldown -c && pnpm run assets",
         "lint": "pnpm exec oxlint .",
         "typecheck": "pnpm exec tsc",
-        "format": "pnpm exec oxfmt ."
+        "format": "pnpm exec oxfmt .",
+        "assets": "node ./copy-assets.mjs"
     },
     "dependencies": {
         "@serenity-kit/opaque": "catalog:",
