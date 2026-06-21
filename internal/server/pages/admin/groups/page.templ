@@ -58,7 +58,7 @@ func filterNonMembers(members []service.User, allUsers []service.User) []service
 }
 
 templ GroupsPage(groups []service.Group, members map[int64][]service.User, allUsers []service.User) {
-	@layout.Page("Groups") {
+	@layout.AdminLayout("Groups") {
 		<h1>Groups</h1>
 		<div id="group-error"></div>
 		<button hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>

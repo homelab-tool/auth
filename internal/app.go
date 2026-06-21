@@ -13,6 +13,7 @@ import (
 	"github.com/homelab-tool/auth/internal/server/api/caddy"
 	"github.com/homelab-tool/auth/internal/server/api/secondfactor"
 	authmw "github.com/homelab-tool/auth/internal/server/middleware"
+	"github.com/homelab-tool/auth/internal/server/pages/admin"
 	"github.com/homelab-tool/auth/internal/server/pages/admin/groups"
 	"github.com/homelab-tool/auth/internal/server/pages/admin/siteconfig"
 	"github.com/homelab-tool/auth/internal/server/pages/layout"
@@ -207,6 +208,7 @@ func CreateApp() (*App, error) {
 	profileGroup.DELETE("/passkey/:id", profile.DeletePasskeyHandler(svcs.JWT, svcs.Credentials))
 
 	adminGroup := e.Group("/admin", authmw.AdminMiddleware(svcs.JWT, svcs.Groups))
+	adminGroup.GET("", admin.PageHandler)
 
 	scHandler := siteconfig.NewHandler(svcs.SiteConfigs, svcs.Groups, svcs.Users)
 	adminGroup.GET("/site-configs", scHandler.PageHandler)

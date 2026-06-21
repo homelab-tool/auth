@@ -40,7 +40,7 @@ func confirmDeleteSite(hostname string) string {
 }
 
 templ Page(data []service.SiteConfig) {
-	@layout.Page("Site Configs") {
+	@layout.AdminLayout("Site Configs") {
 		<h1>Site Configs</h1>
 		<form hx-post="/admin/site-configs" hx-target="#site-config-list" hx-swap="outerHTML">
 			<div>
