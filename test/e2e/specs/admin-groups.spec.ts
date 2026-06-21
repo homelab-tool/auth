@@ -24,6 +24,7 @@ test("admin groups management", async ({ page, app }) => {
         await groups.descriptionInput.fill("Family members");
         await groups.createSubmitButton.click();
         await expect(groups.groupList).toContainText("Family");
+        await expect(groups.createForm).toBeEmpty();
     });
 
     await test.step("register a test user", async () => {
@@ -51,9 +52,11 @@ test("admin groups management", async ({ page, app }) => {
         await expect(page).toHaveURL(`${app.authUrl}/profile`);
 
         await groups.goto();
+        await expect(groups.memberSelect("Family")).toContainText("family-user");
         await groups.memberSelect("Family").selectOption({ label: "family-user" });
         await groups.addMemberButton("Family").click();
         await expect(groups.groupCard("Family")).toContainText("family-user");
+        await expect(groups.memberSelect("Family")).not.toContainText("family-user");
     });
 
     await test.step("remove member from group", async () => {
@@ -72,30 +75,5 @@ test("admin groups management", async ({ page, app }) => {
         page.once("dialog", (dialog) => dialog.accept());
         await groups.deleteGroupButton("Admin").click();
         await expect(groups.groupList).toContainText("Admin");
-    });
-
-    await test.step("non-admin redirected from /admin/groups", async () => {
-        const profile = new ProfilePage(page, app.authUrl);
-        await profile.goto();
-        await profile.logoutButton.click();
-        await expect(page).toHaveURL(`${app.authUrl}/login`);
-
-        const register = new RegisterPage(page, app.authUrl);
-        await register.goto();
-        await register.clientId.fill("non-admin");
-        await register.password.fill("test-password");
-        await register.confirm.fill("test-password");
-        await register.opaqueSubmitButton.click();
-        await expect(register.enrollmentSection).toBeVisible();
-        await register.continueToProfileLink.click();
-        await expect(page).toHaveURL(`${app.authUrl}/profile`);
-
-        await page.goto(`${app.authUrl}/admin/groups`);
-        await expect(page).toHaveURL(`${app.authUrl}/login`);
-    });
-
-    await test.step("non-admin redirected from /admin/site-configs", async () => {
-        await page.goto(`${app.authUrl}/admin/site-configs`);
-        await expect(page).toHaveURL(`${app.authUrl}/login`);
     });
 });

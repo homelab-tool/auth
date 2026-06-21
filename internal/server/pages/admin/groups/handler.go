@@ -59,7 +59,7 @@ func (h *Handler) CreateHandler(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	return GroupList(allGroups, members, users).Render(c.Request().Context(), c.Response())
+	return GroupList(allGroups, members, users, true).Render(c.Request().Context(), c.Response())
 }
 
 func (h *Handler) DeleteHandler(c *echo.Context) error {
@@ -85,7 +85,7 @@ func (h *Handler) DeleteHandler(c *echo.Context) error {
 		return c.String(500, "server error")
 	}
 
-	return GroupList(allGroups, members, users).Render(c.Request().Context(), c.Response())
+	return GroupList(allGroups, members, users, true).Render(c.Request().Context(), c.Response())
 }
 
 func (h *Handler) AddMemberHandler(c *echo.Context) error {

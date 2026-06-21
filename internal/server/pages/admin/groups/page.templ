@@ -43,22 +43,43 @@ func confirmRemove(group *service.Group, user service.User) string {
 	return msg
 }
 
+func filterNonMembers(members []service.User, allUsers []service.User) []service.User {
+	set := make(map[int64]struct{}, len(members))
+	for _, m := range members {
+		set[m.ID] = struct{}{}
+	}
+	filtered := make([]service.User, 0, len(allUsers)-len(members))
+	for _, u := range allUsers {
+		if _, ok := set[u.ID]; !ok {
+			filtered = append(filtered, u)
+		}
+	}
+	return filtered
+}
+
 templ GroupsPage(groups []service.Group, members map[int64][]service.User, allUsers []service.User) {
 	@layout.Page("Groups") {
 		<h1>Groups</h1>
 		<div id="group-error"></div>
 		<button hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>
 		<div id="create-form"></div>
-		@GroupList(groups, members, allUsers)
+		@GroupList(groups, members, allUsers, false)
 	}
 }
 
-templ GroupList(groups []service.Group, members map[int64][]service.User, allUsers []service.User) {
+templ GroupList(groups []service.Group, members map[int64][]service.User, allUsers []service.User, clearForm bool) {
 	<section id="group-list">
-		for _, g := range groups {
-			@GroupArticle(g, members[g.ID], allUsers)
+		if len(groups) > 0 {
+			for _, g := range groups {
+				@GroupArticle(g, members[g.ID], allUsers)
+			}
+		} else {
+			<p>No groups configured.</p>
 		}
 	</section>
+	if clearForm {
+		<div id="create-form" hx-swap-oob="innerHTML"></div>
+	}
 }
 
 templ GroupForm() {
@@ -119,14 +140,16 @@ templ GroupArticle(group service.Group, members []service.User, allUsers []servi
 		} else {
 			<p>No members.</p>
 		}
-		<form hx-post={ membersPath(group.ID) } hx-target={ groupTarget(group.ID) } hx-target-error="#group-error" hx-swap="outerHTML">
-			<select name="user_id" required>
-				<option value="">Select user...</option>
-				for _, u := range allUsers {
-					<option value={ u.ID }>{ u.DisplayName }</option>
-				}
-			</select>
-			<button type="submit">Add</button>
-		</form>
+		if nonMembers := filterNonMembers(members, allUsers); len(nonMembers) > 0 {
+			<form hx-post={ membersPath(group.ID) } hx-target={ groupTarget(group.ID) } hx-target-error="#group-error" hx-swap="outerHTML">
+				<select name="user_id" required>
+					<option value="">Select user...</option>
+					for _, u := range nonMembers {
+						<option value={ u.ID }>{ u.DisplayName }</option>
+					}
+				</select>
+				<button type="submit">Add</button>
+			</form>
+		}
 	</article>
 }
