@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"io/fs"
 	"log/slog"
+	"net/http"
+	"strings"
 
 	bytemareopaque "github.com/bytemare/opaque"
 	"github.com/homelab-tool/auth/internal/auth"
@@ -103,6 +105,17 @@ func CreateApp() (*App, error) {
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept},
+	}))
+
+	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
+		Skipper: func(c *echo.Context) bool {
+			path := c.Path()
+			return strings.HasPrefix(path, "/api/") ||
+				strings.HasPrefix(path, "/caddy/") ||
+				path == "/health"
+		},
+		CookieSecure:   true,
+		CookieSameSite: http.SameSiteStrictMode,
 	}))
 
 	e.GET("/health", func(c *echo.Context) error {
