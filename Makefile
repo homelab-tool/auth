@@ -29,8 +29,8 @@ templ-gen:
 	go tool templ generate
 
 copy-htmx: js-build
-	cp node_modules/htmx.org/dist/htmx.min.js \
-		internal/server/pages/static/dist/htmx.min.js
+	cp ./node_modules/.pnpm/htmx.org@2.0.10/node_modules/htmx.org/dist/htmx.min.js \
+		internal/server/pages/static/dist/htmx.2.0.10.js
 
 js-build:
 	pnpm build
