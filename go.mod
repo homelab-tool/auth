@@ -19,10 +19,14 @@ require (
 )
 
 require (
+	dario.cat/mergo v1.0.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	filippo.io/nistec v0.0.4 // indirect
 	github.com/a-h/parse v0.0.0-20250122154542-74294addb73e // indirect
-	github.com/andybalholm/brotli v1.1.0 // indirect
+	github.com/air-verse/air v1.65.3 // indirect
+	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/bep/godartsass/v2 v2.5.0 // indirect
+	github.com/bep/golibsass v1.2.0 // indirect
 	github.com/bitfield/gotestdox v0.2.2 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/bytemare/ecc v0.9.0 // indirect
@@ -40,17 +44,25 @@ require (
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/go-webauthn/x v0.2.6 // indirect
+	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/gohugoio/hugo v0.149.1 // indirect
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gtank/ristretto255 v0.2.0 // indirect
+	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/natefinch/atomic v1.0.1 // indirect
+	github.com/pelletier/go-toml v1.9.5 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/spf13/afero v1.14.0 // indirect
+	github.com/spf13/cast v1.9.2 // indirect
+	github.com/tdewolff/parse/v2 v2.8.3 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.52.0 // indirect
@@ -62,6 +74,7 @@ require (
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
+	google.golang.org/protobuf v1.36.8 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/gotestsum v1.13.0 // indirect
@@ -69,5 +82,6 @@ require (
 
 tool (
 	github.com/a-h/templ/cmd/templ
+	github.com/air-verse/air
 	gotest.tools/gotestsum
 )
