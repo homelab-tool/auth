@@ -56,12 +56,14 @@ templ Page(data []service.SiteConfig) {
 						<li>
 							<strong>{ cfg.Hostname }</strong>
 							<button
+								class="btn-danger"
 								hx-delete={ siteConfigPath(cfg.ID) }
 								hx-target="#site-config-list"
 								hx-swap="outerHTML"
 								hx-confirm={ confirmDeleteSite(cfg.Hostname) }
 							>Delete</button>
 							<button
+								class="btn-secondary"
 								hx-get={ siteConfigPath(cfg.ID) }
 								hx-target={ siteAccessTarget(cfg.ID) }
 								hx-swap="innerHTML"
@@ -87,6 +89,7 @@ templ SiteAccessSection(site *service.SiteConfig, groups []service.Group, allUse
 					<li>
 						{ g.Name }
 						<button
+							class="btn-danger"
 							hx-delete={ revokeGroupSitePath(site.ID, g.ID) }
 							hx-target={ siteAccessTarget(site.ID) }
 							hx-swap="outerHTML"
@@ -113,6 +116,7 @@ templ SiteAccessSection(site *service.SiteConfig, groups []service.Group, allUse
 					<li>
 						{ u.DisplayName }
 						<button
+							class="btn-danger"
 							hx-delete={ revokeUserSitePath(site.ID, u.ID) }
 							hx-target={ siteAccessTarget(site.ID) }
 							hx-swap="outerHTML"

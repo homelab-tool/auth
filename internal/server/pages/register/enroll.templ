@@ -8,7 +8,7 @@ import (
 templ TOTPSetupPage(secret string, uri string) {
 	@layout.Page("Set Up Authenticator App") {
 		@TOTPSetupForm(secret, uri, "/register/2fa/totp/verify", "/profile")
-		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<a href="/profile" role="button" class="back-link">Back to profile</a>
 		<script type="module" src={ static.StaticURL("/pages/enroll.js") }></script>
 	}
 }
@@ -18,10 +18,10 @@ templ WebAuthnSetupPage() {
 		<h1>Set Up Security Key</h1>
 		<p>Click the button below to register your security key or platform authenticator (e.g. Touch ID, Windows Hello).</p>
 		<div id="webauthn-section">
-			<button id="webauthn-2fa-setup" type="button" data-redirect-on-success="/profile">Set Up Security Key</button>
+			<button id="webauthn-2fa-setup" class="btn-secondary" type="button" data-redirect-on-success="/profile">Set Up Security Key</button>
 			<div id="webauthn-2fa-status"></div>
 		</div>
-		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<a href="/profile" role="button" class="back-link">Back to profile</a>
 		<script type="module" src={ static.StaticURL("/pages/enroll.js") }></script>
 	}
 }
@@ -33,7 +33,7 @@ templ EnrollmentPage() {
 		<div id="totp-section">
 			<h2>Authenticator App (TOTP)</h2>
 			<p>Use an authenticator app like Google Authenticator, Authy, or 1Password.</p>
-			<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+			<button class="btn-secondary" hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
 				Set Up Authenticator App
 			</button>
 		</div>
@@ -41,7 +41,7 @@ templ EnrollmentPage() {
 		<div id="webauthn-section">
 			<h2>Security Key (WebAuthn)</h2>
 			<p>Use a hardware security key or platform authenticator (e.g. Touch ID, Windows Hello).</p>
-			<button id="webauthn-2fa-setup" type="button">Set Up Security Key</button>
+			<button id="webauthn-2fa-setup" class="btn-secondary" type="button">Set Up Security Key</button>
 			<div id="webauthn-2fa-status"></div>
 		</div>
 		<hr/>
@@ -67,7 +67,7 @@ templ TOTPSetupForm(secret string, uri string, verifyEndpoint string, redirectOn
 			</div>
 			<button type="submit">Verify</button>
 		</form>
-		<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+		<button class="btn-secondary" hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
 			Regenerate Secret
 		</button>
 	</div>
@@ -83,8 +83,8 @@ templ TOTPSuccess() {
 templ TOTPError(msg string) {
 	<div id="totp-section">
 		<h2>Authenticator App (TOTP)</h2>
-		<p id="totp-error" style="color: red;">{ msg }</p>
-		<button hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
+		<p id="totp-error" class="text-error">{ msg }</p>
+		<button class="btn-secondary" hx-post="/register/2fa/totp/generate" hx-target="#totp-section" hx-swap="outerHTML">
 			Try Again
 		</button>
 	</div>

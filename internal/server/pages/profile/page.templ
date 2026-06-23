@@ -40,7 +40,7 @@ templ Page(data *ProfileData) {
 		<section id="profile-password">
 			<h2>Password</h2>
 			if data.HasPassword {
-				<p><span style="color: green;">&#10003; Password set</span></p>
+				<p><span class="text-success">&#10003; Password set</span></p>
 			} else {
 				<p>Password not set</p>
 				<a href="/profile/password" role="button">Set Password</a>
@@ -60,7 +60,7 @@ templ Page(data *ProfileData) {
 							}
 							{ " - " }
 							<span>{ purposeDisplay(pk.Purpose) }</span>
-							<button hx-delete="/profile/passkey/{ pk.ID }" hx-target="#profile-passkeys" hx-swap="outerHTML" hx-confirm="Delete this passkey?">Delete</button>
+							<button class="btn-danger" hx-delete="/profile/passkey/{ pk.ID }" hx-target="#profile-passkeys" hx-swap="outerHTML" hx-confirm="Delete this passkey?">Delete</button>
 						</li>
 					}
 				</ul>
@@ -88,8 +88,8 @@ templ TwoFASection(data *ProfileData) {
 			<dt>Authenticator App (TOTP)</dt>
 			<dd>
 				if data.HasTOTP {
-					<span style="color: green;">&#10003; Enabled</span>
-					<button hx-delete="/profile/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
+					<span class="text-success">&#10003; Enabled</span>
+					<button class="btn-danger" hx-delete="/profile/2fa/totp" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Disable TOTP?">Disable</button>
 				} else {
 					<span>Not set up</span>
 					<a href="/register/2fa/totp" role="button">Set up</a>
@@ -98,8 +98,8 @@ templ TwoFASection(data *ProfileData) {
 			<dt>Security Key (WebAuthn)</dt>
 			<dd>
 				if has2FA(data.Has2FA, "webauthn") {
-					<span style="color: green;">&#10003; Enabled</span>
-					<button hx-delete="/profile/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Remove 2FA from all passkeys?">Disable</button>
+					<span class="text-success">&#10003; Enabled</span>
+					<button class="btn-danger" hx-delete="/profile/2fa/webauthn" hx-target="#profile-2fa" hx-swap="outerHTML" hx-confirm="Remove 2FA from all passkeys?">Disable</button>
 				} else {
 					<span>Not set up</span>
 					<a href="/register/2fa/webauthn" role="button">Set up</a>
@@ -127,7 +127,7 @@ templ PasswordSetupPage(displayName string) {
 			</div>
 			<button type="submit">Set Password</button>
 		</form>
-		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<a href="/profile" role="button" class="back-link">Back to profile</a>
 		<script type="module" src={ static.StaticURL("/pages/password-setup.js") }></script>
 	}
 }
@@ -150,7 +150,7 @@ templ AddPasskeyPage() {
 			</div>
 			<button type="submit">Create Passkey</button>
 		</form>
-		<a href="/profile" role="button" style="margin-top: 1rem;">Back to profile</a>
+		<a href="/profile" role="button" class="back-link">Back to profile</a>
 		<script type="module" src={ static.StaticURL("/pages/add-passkey.js") }></script>
 	}
 }

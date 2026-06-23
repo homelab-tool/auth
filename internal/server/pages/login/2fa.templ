@@ -16,7 +16,7 @@ templ Login2FAChallenge(sessionID string, methods []string) {
 			</form>
 		}
 		if hasMethod(methods, "webauthn") {
-			<button id="webauthn-2fa" type="button" data-session-id={ sessionID }>Use Security Key</button>
+			<button id="webauthn-2fa" class="btn-secondary" type="button" data-session-id={ sessionID }>Use Security Key</button>
 		}
 		<script type="module" src={ static.StaticURL("/pages/login-2fa.js") }></script>
 	</div>
@@ -25,7 +25,7 @@ templ Login2FAChallenge(sessionID string, methods []string) {
 templ LoginTOTPError(sessionID string, msg string) {
 	<div id="login-2fa-section">
 		<h2>Two-Factor Authentication</h2>
-		<p id="totp-error" style="color: red;">{ msg }</p>
+		<p id="totp-error" class="text-error">{ msg }</p>
 		<form hx-post="/login/2fa/totp" hx-target="#login-2fa-section" hx-swap="outerHTML">
 			<input type="hidden" name="sessionId" value={ sessionID }/>
 			<div>

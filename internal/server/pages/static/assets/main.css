@@ -1,0 +1,392 @@
+/* Variables */
+:root {
+    /* Catppuccin - Latte */
+    --catppuccin-latte-rosewater: #dc8a78;
+    --catppuccin-latte-flamingo: #dd7878;
+    --catppuccin-latte-pink: #ea76cb;
+    --catppuccin-latte-mauve: #8839ef;
+    --catppuccin-latte-red: #d20f39;
+    --catppuccin-latte-maroon: #e64553;
+    --catppuccin-latte-peach: #fe640b;
+    --catppuccin-latte-yellow: #df8e1d;
+    --catppuccin-latte-green: #40a02b;
+    --catppuccin-latte-teal: #179299;
+    --catppuccin-latte-sky: #04a5e5;
+    --catppuccin-latte-sapphire: #209fb5;
+    --catppuccin-latte-blue: #1e66f5;
+    --catppuccin-latte-lavender: #7287fd;
+    --catppuccin-latte-text: #4c4f69;
+    --catppuccin-latte-subtext1: #5c5f77;
+    --catppuccin-latte-subtext0: #6c6f85;
+    --catppuccin-latte-overlay2: #7c7f93;
+    --catppuccin-latte-overlay1: #8c8fa1;
+    --catppuccin-latte-overlay0: #9ca0b0;
+    --catppuccin-latte-surface2: #acb0be;
+    --catppuccin-latte-surface1: #bcc0cc;
+    --catppuccin-latte-surface0: #ccd0da;
+    --catppuccin-latte-base: #eff1f5;
+    --catppuccin-latte-mantle: #e6e9ef;
+    --catppuccin-latte-crust: #dce0e8;
+
+    /* Catppuccin - Mocha */
+    --catppuccin-mocha-rosewater: #f5e0dc;
+    --catppuccin-mocha-flamingo: #f2cdcd;
+    --catppuccin-mocha-pink: #f5c2e7;
+    --catppuccin-mocha-mauve: #cba6f7;
+    --catppuccin-mocha-red: #f38ba8;
+    --catppuccin-mocha-maroon: #eba0ac;
+    --catppuccin-mocha-peach: #fab387;
+    --catppuccin-mocha-yellow: #f9e2af;
+    --catppuccin-mocha-green: #a6e3a1;
+    --catppuccin-mocha-teal: #94e2d5;
+    --catppuccin-mocha-sky: #89dceb;
+    --catppuccin-mocha-sapphire: #74c7ec;
+    --catppuccin-mocha-blue: #89b4fa;
+    --catppuccin-mocha-lavender: #b4befe;
+    --catppuccin-mocha-text: #cdd6f4;
+    --catppuccin-mocha-subtext1: #bac2de;
+    --catppuccin-mocha-subtext0: #a6adc8;
+    --catppuccin-mocha-overlay2: #9399b2;
+    --catppuccin-mocha-overlay1: #7f849c;
+    --catppuccin-mocha-overlay0: #6c7086;
+    --catppuccin-mocha-surface2: #585b70;
+    --catppuccin-mocha-surface1: #45475a;
+    --catppuccin-mocha-surface0: #313244;
+    --catppuccin-mocha-base: #1e1e2e;
+    --catppuccin-mocha-mantle: #181825;
+    --catppuccin-mocha-crust: #11111b;
+}
+
+:root {
+    color-scheme: light dark;
+
+    /* Semantic colors */
+    --color-text: light-dark(var(--catppuccin-latte-text), var(--catppuccin-mocha-text));
+    --color-text-secondary: light-dark(
+        var(--catppuccin-latte-subtext1),
+        var(--catppuccin-mocha-subtext1)
+    );
+    --color-text-tertiary: light-dark(
+        var(--catppuccin-latte-subtext0),
+        var(--catppuccin-mocha-subtext0)
+    );
+
+    --color-bg: light-dark(var(--catppuccin-latte-base), var(--catppuccin-mocha-base));
+    --color-bg-secondary: light-dark(
+        var(--catppuccin-latte-mantle),
+        var(--catppuccin-mocha-mantle)
+    );
+    --color-border: light-dark(var(--catppuccin-latte-surface1), var(--catppuccin-mocha-surface1));
+
+    --color-primary: light-dark(var(--catppuccin-latte-mauve), var(--catppuccin-mocha-mauve));
+    --color-primary-hover: color-mix(in srgb, var(--color-primary), black 12%);
+
+    --color-success: var(--catppuccin-latte-green);
+    --color-danger: var(--catppuccin-latte-red);
+    --color-danger-hover: color-mix(in srgb, var(--color-danger), black 12%);
+    --color-error: var(--color-danger);
+
+    /* Typography */
+    --font-family: system-ui, -apple-system, sans-serif;
+    --font-family-code: ui-monospace, monospace;
+    --font-size-base: 16px;
+    --font-size-sm: 0.875rem;
+    --font-size-lg: 1.125rem;
+    --line-height: 1.5;
+
+    /* Spacing */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+
+    /* Radii */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+
+    /* Layout */
+    --sidebar-width: 220px;
+}
+
+/* CSS reset */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height);
+    color: var(--color-text);
+    background: var(--color-bg);
+}
+
+button {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+}
+
+ol,
+ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4 {
+    margin: 0 0 var(--spacing-md);
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+h1 {
+    font-size: 1.5rem;
+}
+h2 {
+    font-size: 1.25rem;
+}
+h3 {
+    font-size: 1.125rem;
+}
+h4 {
+    font-size: 1rem;
+}
+
+p {
+    margin: 0 0 var(--spacing-md);
+}
+
+small {
+    font-size: var(--font-size-sm);
+    color: var(--color-text-secondary);
+}
+
+strong {
+    font-weight: 600;
+}
+
+em {
+    font-style: italic;
+}
+
+code {
+    font-family: var(--font-family-code);
+    font-size: var(--font-size-sm);
+    background: var(--color-bg-secondary);
+    padding: 0.125rem 0.375rem;
+    border-radius: var(--radius-sm);
+}
+
+hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: var(--spacing-lg) 0;
+}
+
+dl {
+    margin: 0 0 var(--spacing-md);
+}
+
+dt {
+    font-weight: 600;
+    margin-top: var(--spacing-sm);
+}
+
+dd {
+    margin: 0 0 var(--spacing-sm) 0;
+}
+
+/* default lists get normal bullets */
+ul:not([class]),
+ol:not([class]) {
+    list-style: disc;
+    padding-left: 1.5rem;
+}
+
+li {
+    margin-bottom: var(--spacing-xs);
+}
+
+/* Links */
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Forms */
+label {
+    display: block;
+    font-weight: 500;
+    margin-bottom: var(--spacing-xs);
+}
+
+input:not([type="checkbox"]),
+select {
+    display: block;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height);
+    color: var(--color-text);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+}
+
+input:not([type="checkbox"]):focus,
+select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+input[type="checkbox"] {
+    margin-right: var(--spacing-xs);
+    accent-color: var(--color-primary);
+}
+
+label:has(input[type="checkbox"]) {
+    display: inline-flex;
+    align-items: center;
+    font-weight: normal;
+}
+
+/* Buttons
+ * <button>                       – primary action
+ * <button class="btn-danger">    – destructive action
+ * <button class="btn-secondary"> – secondary / outline
+ * <a role="button">              – link styled as button
+ */
+button,
+a[role="button"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+    font-weight: 500;
+    line-height: 1;
+    color: #fff;
+    background: var(--color-primary);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+button:hover,
+a[role="button"]:hover {
+    background: var(--color-primary-hover);
+    text-decoration: none;
+}
+
+button.btn-danger {
+    background: var(--color-danger);
+}
+
+button.btn-danger:hover {
+    background: var(--color-danger-hover);
+}
+
+button.btn-secondary {
+    color: var(--color-text);
+    background: transparent;
+    border: 1px solid var(--color-border);
+}
+
+button.btn-secondary:hover {
+    background: var(--color-bg-secondary);
+}
+
+a[role="button"] {
+    display: inline-block;
+}
+
+/* Semantic status colors */
+.text-success {
+    color: var(--color-success);
+    font-weight: 500;
+}
+
+.text-error {
+    color: var(--color-error);
+    font-weight: 500;
+}
+
+/* Utility */
+.back-link {
+    display: inline-block;
+    margin-top: var(--spacing-lg);
+}
+
+/* Admin layout: Left sidebar + right content area */
+.admin-container {
+    display: flex;
+    min-height: 100vh;
+}
+
+.admin-sidebar {
+    width: var(--sidebar-width);
+    min-width: var(--sidebar-width);
+    padding: var(--spacing-lg);
+    background: var(--color-bg-secondary);
+    border-right: 1px solid var(--color-border);
+}
+
+.admin-sidebar h2 {
+    margin-top: 0;
+    font-size: 1.2rem;
+}
+
+.admin-sidebar a {
+    text-decoration: none;
+    color: var(--color-text);
+    display: block;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-sm);
+}
+
+.admin-sidebar a:hover {
+    background: var(--color-border);
+}
+
+.admin-content {
+    flex: 1;
+    padding: var(--spacing-lg);
+}
+
+/* Components */
+article {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+article header {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    margin-bottom: var(--spacing-md);
+}
+
+section {
+    margin-bottom: var(--spacing-xl);
+}

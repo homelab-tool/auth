@@ -61,7 +61,7 @@ templ GroupsPage(groups []service.Group, members map[int64][]service.User, allUs
 	@layout.AdminLayout("Groups") {
 		<h1>Groups</h1>
 		<div id="group-error"></div>
-		<button hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>
+		<button class="btn-secondary" hx-get="/admin/groups/new" hx-target="#create-form" hx-swap="innerHTML">+ Add Group</button>
 		<div id="create-form"></div>
 		@GroupList(groups, members, allUsers, false)
 	}
@@ -111,6 +111,7 @@ templ GroupArticle(group service.Group, members []service.User, allUsers []servi
 			}
 			<small>{ len(members) } member(s)</small>
 			<button
+				class="btn-danger"
 				hx-delete={ groupPath(group.ID) }
 				hx-target="#group-list"
 				hx-target-error="#group-error"
@@ -129,6 +130,7 @@ templ GroupArticle(group service.Group, members []service.User, allUsers []servi
 					<li>
 						{ m.DisplayName }
 						<button
+							class="btn-danger"
 							hx-delete={ memberPath(group.ID, m.ID) }
 							hx-target={ groupTarget(group.ID) }
 							hx-swap="outerHTML"
