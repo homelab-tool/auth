@@ -1,5 +1,7 @@
 /* Variables */
 :root {
+    color-scheme: light dark;
+
     /* Catppuccin - Latte */
     --catppuccin-latte-rosewater: #dc8a78;
     --catppuccin-latte-flamingo: #dd7878;
@@ -55,10 +57,6 @@
     --catppuccin-mocha-base: #1e1e2e;
     --catppuccin-mocha-mantle: #181825;
     --catppuccin-mocha-crust: #11111b;
-}
-
-:root {
-    color-scheme: light dark;
 
     /* Semantic colors */
     --color-text: light-dark(var(--catppuccin-latte-text), var(--catppuccin-mocha-text));
@@ -70,17 +68,14 @@
         var(--catppuccin-latte-subtext0),
         var(--catppuccin-mocha-subtext0)
     );
-
     --color-bg: light-dark(var(--catppuccin-latte-base), var(--catppuccin-mocha-base));
     --color-bg-secondary: light-dark(
         var(--catppuccin-latte-mantle),
         var(--catppuccin-mocha-mantle)
     );
     --color-border: light-dark(var(--catppuccin-latte-surface1), var(--catppuccin-mocha-surface1));
-
     --color-primary: light-dark(var(--catppuccin-latte-mauve), var(--catppuccin-mocha-mauve));
     --color-primary-hover: color-mix(in srgb, var(--color-primary), black 12%);
-
     --color-success: var(--catppuccin-latte-green);
     --color-danger: var(--catppuccin-latte-red);
     --color-danger-hover: color-mix(in srgb, var(--color-danger), black 12%);
@@ -152,12 +147,15 @@ h4 {
 h1 {
     font-size: 1.5rem;
 }
+
 h2 {
     font-size: 1.25rem;
 }
+
 h3 {
     font-size: 1.125rem;
 }
+
 h4 {
     font-size: 1rem;
 }
@@ -313,10 +311,6 @@ button.btn-secondary {
 
 button.btn-secondary:hover {
     background: var(--color-bg-secondary);
-}
-
-a[role="button"] {
-    display: inline-block;
 }
 
 /* Semantic status colors */

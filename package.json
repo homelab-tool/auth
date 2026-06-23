@@ -7,7 +7,7 @@
     "author": "erri120",
     "scripts": {
         "build": "pnpm exec rolldown -c && pnpm run assets",
-        "lint": "pnpm exec oxlint .",
+        "lint": "pnpm exec oxlint . && pnpm exec stylelint ./internal/server/pages/static/assets/*.css",
         "typecheck": "pnpm exec tsc",
         "format": "pnpm exec oxfmt .",
         "assets": "node ./copy-assets.mjs"
@@ -25,6 +25,8 @@
         "oxlint": "catalog:",
         "oxlint-tsgolint": "catalog:",
         "rolldown": "catalog:",
+        "stylelint": "catalog:",
+        "stylelint-config-standard": "catalog:",
         "testcontainers": "catalog:",
         "typescript": "catalog:"
     },
